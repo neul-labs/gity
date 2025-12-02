@@ -255,9 +255,11 @@ impl<S: MetadataStore> Daemon<S> {
                     Ok(new_generation) => new_generation,
                     Err(err) => return err_response(err),
                 };
+                // Filter out .git internal paths - fsmonitor only wants working tree files
+                let working_tree_paths = filter_working_tree_paths(dirty_paths);
                 DaemonResponse::FsMonitorSnapshot(FsMonitorSnapshot {
                     repo_path,
-                    dirty_paths,
+                    dirty_paths: working_tree_paths,
                     generation,
                 })
             }
@@ -393,6 +395,17 @@ fn relative_path(repo_path: &Path, path: &Path) -> Option<PathBuf> {
     } else {
         Some(path.to_path_buf())
     }
+}
+
+/// Returns true if the path is inside the `.git` directory.
+/// Git's fsmonitor only wants working tree paths, not internal Git files.
+fn is_git_internal_path(path: &Path) -> bool {
+    path.components().any(|c| c.as_os_str() == ".git")
+}
+
+/// Filter out `.git` internal paths for fsmonitor output.
+fn filter_working_tree_paths(paths: Vec<PathBuf>) -> Vec<PathBuf> {
+    paths.into_iter().filter(|p| !is_git_internal_path(p)).collect()
 }
 
 fn should_track(kind: &WatchEventKind) -> bool {

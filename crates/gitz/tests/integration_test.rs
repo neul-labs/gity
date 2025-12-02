@@ -843,3 +843,108 @@ fn test_git_config_fsmonitor_setting() {
     // Should return error (exit code 1) when key doesn't exist
     assert!(!output.status.success(), "fsmonitor config should be removed");
 }
+
+// =============================================================================
+// Branch Switch and .git Path Filtering Tests
+// =============================================================================
+
+/// Test that .git internal paths are filtered from fsmonitor output
+#[tokio::test]
+async fn test_fsmonitor_filters_git_internal_paths() {
+    let dir = TempDir::new().unwrap();
+    let _repo = create_test_repo(dir.path());
+
+    let store = InMemoryMetadataStore::new();
+
+    // Manually mark some paths as dirty, including .git internal paths
+    store.register_repo(dir.path().to_path_buf()).expect("register");
+    store.mark_dirty_path(dir.path(), PathBuf::from("README.md")).expect("mark");
+    store.mark_dirty_path(dir.path(), PathBuf::from("src/lib.rs")).expect("mark");
+    store.mark_dirty_path(dir.path(), PathBuf::from(".git/HEAD")).expect("mark");
+    store.mark_dirty_path(dir.path(), PathBuf::from(".git/index")).expect("mark");
+    store.mark_dirty_path(dir.path(), PathBuf::from(".git/refs/heads/main")).expect("mark");
+
+    let runtime = Runtime::new(store, None);
+    let service = runtime.service_handle();
+
+    // Query fsmonitor snapshot
+    let response = service
+        .execute(DaemonCommand::FsMonitorSnapshot {
+            repo_path: dir.path().to_path_buf(),
+            last_seen_generation: None,
+        })
+        .await
+        .expect("fsmonitor");
+
+    match response {
+        DaemonResponse::FsMonitorSnapshot(snapshot) => {
+            // Should contain working tree paths
+            let has_readme = snapshot.dirty_paths.iter().any(|p| p.ends_with("README.md"));
+            let has_lib = snapshot.dirty_paths.iter().any(|p| p.ends_with("src/lib.rs"));
+            assert!(has_readme, "Should contain README.md");
+            assert!(has_lib, "Should contain src/lib.rs");
+
+            // Should NOT contain .git internal paths
+            let has_git_head = snapshot.dirty_paths.iter().any(|p| p.to_string_lossy().contains(".git"));
+            assert!(!has_git_head, "Should NOT contain .git paths, but got: {:?}", snapshot.dirty_paths);
+        }
+        other => panic!("unexpected: {:?}", other),
+    }
+}
+
+/// Test that branch switch is detected via file changes
+#[test]
+fn test_branch_switch_detected_via_file_changes() {
+    let dir = TempDir::new().unwrap();
+    let repo = create_test_repo(dir.path());
+
+    // Create a new branch with different content
+    let head = repo.head().expect("head");
+    let commit = head.peel_to_commit().expect("commit");
+
+    repo.branch("feature", &commit, false).expect("create branch");
+
+    // Switch to feature branch
+    repo.set_head("refs/heads/feature").expect("set head");
+    repo.checkout_head(Some(git2::build::CheckoutBuilder::default().force()))
+        .expect("checkout");
+
+    // Modify file on feature branch
+    modify_file(dir.path(), "README.md", "# Feature branch content\n");
+
+    {
+        let mut index = repo.index().expect("index");
+        index.add_path(Path::new("README.md")).expect("add");
+        index.write().expect("write");
+        let tree_id = index.write_tree().expect("tree");
+        let tree = repo.find_tree(tree_id).expect("find tree");
+        let parent = repo.head().expect("head").peel_to_commit().expect("commit");
+        let sig = Signature::now("Test", "test@example.com").expect("sig");
+        repo.commit(Some("HEAD"), &sig, &sig, "Feature commit", &tree, &[&parent])
+            .expect("commit");
+    }
+
+    // Switch back to main/master
+    let default_branch = if repo.find_branch("main", git2::BranchType::Local).is_ok() {
+        "refs/heads/main"
+    } else {
+        "refs/heads/master"
+    };
+    repo.set_head(default_branch).expect("set head back");
+    repo.checkout_head(Some(git2::build::CheckoutBuilder::default().force()))
+        .expect("checkout back");
+
+    // After switching, README.md should have original content
+    let content = fs::read_to_string(dir.path().join("README.md")).expect("read");
+    assert!(content.contains("# Test Repo"), "Should have original content after branch switch");
+
+    // Git status should show clean
+    let output = Command::new("git")
+        .args(["status", "--porcelain"])
+        .current_dir(dir.path())
+        .output()
+        .expect("git status");
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.trim().is_empty(), "Working tree should be clean after checkout: {}", stdout);
+}

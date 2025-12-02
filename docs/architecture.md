@@ -26,8 +26,33 @@ Internally the CLI/tray faces connect to the daemon core through `async-nng` IPC
 ### Watch Service
 
 - Uses platform-specific backends (FSEvents on macOS, inotify on Linux, ReadDirectoryChangesW on Windows) via the `notify` crate and funnels those events through a unified watcher abstraction.
+- Watches the entire repository directory recursively, including the `.git` directory.
 - Normalizes events into a canonical change set and immediately updates the metadata store.
 - Emits compact notifications through the async message bus so interested clients can react (e.g., IDEs updating decorations).
+
+### FSMonitor Integration
+
+Gitz implements Git's fsmonitor protocol v2. When Git runs `git status`, it asks gitz "what changed since token X?" and gitz responds with only the changed paths.
+
+**Critical: Working Tree Path Filtering**
+
+The watcher sees all filesystem events, including changes inside `.git/` (HEAD updates, index changes, ref updates). However, Git's fsmonitor contract expects only **working tree paths**—the `.git` directory is managed by Git itself.
+
+Before responding to fsmonitor queries, gitz filters out all `.git` internal paths:
+
+```rust
+fn is_git_internal_path(path: &Path) -> bool {
+    path.components().any(|c| c.as_os_str() == ".git")
+}
+```
+
+This filtering is essential for correct behavior during:
+
+- **Branch switches**: Git updates `.git/HEAD` and checks out working tree files. Only the working tree changes are reported.
+- **Commits**: Git updates `.git/index` and creates objects. These internal changes are not reported.
+- **Rebases/merges**: Complex `.git` state changes are filtered; only resulting working tree changes are reported.
+
+See [fsmonitor.md](fsmonitor.md) for complete protocol details and edge cases.
 
 ### Metadata & Cache Store
 
@@ -104,7 +129,7 @@ Internally the CLI/tray faces connect to the daemon core through `async-nng` IPC
 
 - **Event-driven** – Watcher deltas enqueue verification tasks immediately.
 - **Idle-time** – After N minutes of inactivity (configurable), the scheduler runs `git maintenance run --task=prefetch` followed by `git maintenance run --auto` which handles commit-graph, loose-objects, and incremental-repack as needed.
-- **Branch changes** – Watching `.git/refs` notifies the runtime whenever HEAD moves. The scheduler records the new branch tip, invalidates conflicting caches, and can opportunistically fetch the corresponding upstream remote.
+- **Branch changes** – When Git switches branches, the working tree files are updated by checkout. The watcher detects these working tree changes and marks them dirty. The `.git/HEAD` and `.git/refs` changes are seen by the watcher but filtered from fsmonitor output (see FSMonitor Integration above).
 - **Manual commands** – `gitz prefetch now`, `gitz maintain`, `gitz health`, and related subcommands insert jobs at the front of the queue or request diagnostic snapshots.
 - **Resource budgets** – If the resource monitor reports high usage, the scheduler may delay prefetch jobs; when usage returns to normal, deferred jobs resume automatically.
 
@@ -122,4 +147,9 @@ Internally the CLI/tray faces connect to the daemon core through `async-nng` IPC
   3. Optionally emit structured telemetry via PUB sockets.
 - Adding a new scheduler job means storing a job descriptor in `sled` and providing an executor function.
 
-For more about decision history, see `docs/alternatives.md`. Process and contribution guidelines live in `docs/process.md`, while `docs/commands.md` covers the CLI/daemon surface.
+## Related Documentation
+
+- [fsmonitor.md](fsmonitor.md) – Git fsmonitor protocol details and edge cases
+- [commands.md](commands.md) – CLI and daemon command reference
+- [alternatives.md](alternatives.md) – Trade-offs against other approaches
+- [process.md](process.md) – Contributing guidelines
