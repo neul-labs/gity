@@ -1,0 +1,12 @@
+[workspace]
+members = [
+    "crates/gitz",
+    "crates/gitz-cli",
+    "crates/gitz-daemon",
+    "crates/gitz-git",
+    "crates/gitz-ipc",
+    "crates/gitz-storage",
+    "crates/gitz-tray",
+    "crates/gitz-watch",
+]
+resolver = "2"

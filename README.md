@@ -23,7 +23,7 @@ The project leans on pragmatic crates such as `async-nng` for low-latency IPC, `
    cargo install --path .
    ```
 
-4. Start the daemon manually (optional—CLI and tray commands auto-start it if missing):
+4. Start the daemon manually (CLI commands will auto-start it if it is absent, but keeping it running is faster):
 
    ```bash
    gitz daemon run &
@@ -57,25 +57,48 @@ If the daemon is not running, `gitz` will auto-start `gitz daemon start` (equiva
 | -------------- | ---------------------------------------- |
 | `README.md`    | This overview and quick-start guide.     |
 | `docs/`        | Detailed design docs, workflows, and ADRs. |
-| `src/bin/`     | `gitz` entry point (CLI + daemon subcommands).   |
-| `src/lib/`     | Shared crates: watchers, scheduler, IPC. |
+| `Cargo.toml`   | Workspace manifest listing every crate.  |
+| `crates/gitz/` | Binary crate that wires Clap + runtime.  |
+| `crates/gitz-cli/` | CLI parser + client-side helpers.    |
+| `crates/gitz-daemon/` | Tokio runtime, scheduler, and async-nng IPC.  |
+| `crates/gitz-git/` | Git config/watch integrations (fsmonitor, etc.). |
+| `crates/gitz-watch/` | Filesystem watcher abstraction + notify backend. |
+| `crates/gitz-ipc/` | Shared IPC schema and service traits. |
+| `crates/gitz-storage/` | Metadata store abstractions.     |
+| `crates/gitz-tray/` | Cross-platform system tray UI (GTK/winit). |
+| `packaging/` | Platform installer scaffolding (deb, macOS, Windows). |
+| `.github/workflows/` | CI/CD pipeline (lint, test, release). |
 
 ## Repository Registration & Lifecycle
 
 - `gitz register` stores a repo entry in `sled` keyed by its `.git` directory and begins watching it immediately.
+- During registration the daemon also applies the recommended Git settings in `.git/config` (`core.fsmonitor`, `core.untrackedCache`, `feature.manyFiles`, commit-graph flags, and promisor/partial clone entries for `origin`); unregistering removes those keys.
 - Registration is local-only; no metadata is pushed to other machines or services.
 - If the runtime has been offline, the next `gitz` invocation loads the cached snapshot, performs a targeted reconciliation scan, and resumes watching. Long gaps trigger a full walk so the cache can be trusted again.
 - `rykv` replicates hot metadata between multiple registrations on the **same** workstation (e.g., worktree pairs or repo clones in different directories) so cold starts stay fast without any network sync.
-- `gitz list` displays every registered repository, its health, and the last event time so you can prune stale entries with `gitz unregister`.
+- `gitz list` displays every registered repository, its health, and the last event time so you can prune stale entries with `gitz unregister`. Add `--stats` to print current daemon CPU/RSS usage plus per-repo queue depths alongside the usual list.
 
 See `docs/architecture.md` for more detail about how watchers rehydrate after downtime.
+
+## Daemon Runtime & IPC
+
+- `gitz daemon run` hosts a Tokio runtime that polls scheduler ticks and serves async-nng REQ/REP traffic on `tcp://127.0.0.1:7557` (override via `GITZ_DAEMON_ADDR`).
+- Short-lived CLI invocations connect to the same address; if they detect that the daemon is missing they spawn `gitz daemon run` in the background and wait until it reports healthy.
+- `gitz status <repo>` asks the daemon to run a scoped `git status` against the watcher-populated dirty paths (falling back to a full scan if needed), caches the result under `$GITZ_HOME/data/status_cache`, and reuses it when the daemon reports no new events. If the daemon reports `RepoStatusUnchanged`, the CLI prints the cached output immediately; if the daemon returns an error, the CLI warns and shows the cached result so developers keep momentum.
+- `gitz events` subscribes to the daemon’s async-nng PUB socket (default `tcp://127.0.0.1:7558`, override via `GITZ_EVENTS_ADDR`) and streams watcher notifications in real time—useful for tray integrations, IDE clients, or debugging fsnotify coverage.
+- The daemon automatically sets `core.fsmonitor` to run `gitz fsmonitor-helper`. Override the helper command via `GITZ_FSMONITOR_HELPER` if you install the binary somewhere unusual (otherwise the CLI detects its own path).
+- Local state (config, sled metadata, logs) lives under `$GITZ_HOME`:
+  - Defaults to `~/.gitz` on POSIX and `%APPDATA%\Gitz` on Windows (override with the `GITZ_HOME` env var).
+  - `data/sled/` stores the embedded database, `config/` is reserved for future settings, and `logs/daemon.log` captures daemon lifecycle events.
+  - `data/status_cache/` stores the last known `gitz status` output per repo plus the daemon-provided generation token so repeated calls remain instant.
+- Metadata persists inside `sled` under your platform data directory (e.g., `~/.local/share/gitz/sled`), so restarting the daemon keeps registrations intact.
 
 ## Background Work Triggers
 
 Background Git commands run only when they help local developers:
 
-- **File events** – watcher deltas enqueue verification jobs so `git status` stays incremental.
-- **Idle timers** – a low-priority loop triggers `git fetch --filter=blob:none` and `git maintenance run` after configurable idle periods.
+- **File events** – watcher deltas enqueue verification jobs and scoped `git status` runs so caches stay fresh.
+- **Idle timers** – a low-priority loop triggers `git maintenance run --task=prefetch` and `git maintenance run --auto` after configurable idle periods.
 - **Manual nudges** – commands like `gitz prefetch now` push urgent jobs to the front of the queue.
 
 When a repository hasn’t been touched for a while, the runtime suspends its timers. Once a new file event or CLI command appears, the scheduler resumes, performs a freshness check, then issues deferred fetch/maintenance jobs.
@@ -142,4 +165,4 @@ Start with the architecture doc if you need to understand how the parts fit toge
 2. Open a draft PR early so reviewers can help shape the direction.
 3. Update relevant docs whenever you change behavior.
 
-Please include notes on how you tested your changes and any regressions you considered. The CI matrix (to be added) will run the same checks documented in our process guide.
+Please include notes on how you tested your changes and any regressions you considered. The CI matrix runs the same checks documented in our process guide across Linux, macOS, and Windows.

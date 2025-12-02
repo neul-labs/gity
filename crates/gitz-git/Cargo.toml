@@ -1,0 +1,11 @@
+[package]
+name = "gitz-git"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+git2 = { version = "0.19", default-features = false, features = ["vendored-libgit2"] }
+thiserror = "1.0"
+
+[dev-dependencies]
+tempfile = "3.12"

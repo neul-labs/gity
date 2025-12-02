@@ -20,13 +20,15 @@ The daemon automatically tracks CPU, memory, file descriptors, and sled storage 
 | ------- | ----------- |
 | `gitz register <repo>` | Adds a repository to the registry, kicks off an initial scan, and starts watching it. |
 | `gitz unregister <repo>` | Removes the repo from the registry, stops watchers, and drops cached metadata. |
-| `gitz list [--stats]` | Shows every registered repository, health indicators, and optional resource stats when `--stats` is specified. |
+| `gitz list [--stats]` | Shows every registered repository, health indicators, and optional resource stats when `--stats` is specified (CPU/RSS/pending jobs + per-repo queue depth). |
 | `gitz status <repo>` | Returns a fast status summary (clean/dirty, changed paths) using cached metadata plus targeted Git verification. |
+| `gitz fsmonitor-helper [version token]` | Implementation backing `core.fsmonitor`; Git invokes this command with the protocol version + token, and it emits NUL-separated dirty paths from the daemon. |
+| `gitz events` | Subscribes to the daemon’s PUB socket and streams watcher notifications until interrupted. |
 | `gitz changed <repo> [--since <token>]` | Lists files changed since the provided watcher token (defaults to last status token). |
 | `gitz prefetch <repo> [now]` | Enqueues background fetch/maintenance jobs. With `now`, the job jumps to the front of the queue. |
 | `gitz maintain <repo>` | Forces maintenance tasks (commit-graph refresh, GC) regardless of idle timers. |
-| `gitz logs <repo> [--follow]` | Streams structured daemon logs for the repo. `--follow` tails live output; without it, the command prints the most recent entries. Each log line includes resource metrics. |
-| `gitz health <repo>` | Runs diagnostic checks (sled integrity, watcher tokens, scheduler backlog, resource throttling) and prints a human-friendly report. |
+| `gitz logs <repo> [--follow] [--limit N]` | Streams structured daemon logs for the repo. `--follow` tails live output; without it, the command prints the most recent entries (default `N=50`). Each log line includes resource metrics. |
+| `gitz health <repo>` | Runs diagnostic checks (sled integrity, watcher tokens, scheduler backlog, resource throttling) and prints a human-friendly report. Includes the current daemon-side generation token so cached status consumers can verify expectations. |
 
 ## System Tray
 

@@ -1,0 +1,33 @@
+[package]
+name = "gitz"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+dirs = "5.0"
+clap = { version = "4.5", features = ["derive"] }
+gitz-cli = { path = "../gitz-cli" }
+gitz-daemon = { path = "../gitz-daemon" }
+gitz-ipc = { path = "../gitz-ipc" }
+gitz-storage = { path = "../gitz-storage" }
+gitz-tray = { path = "../gitz-tray", optional = true }
+libc = { version = "0.2", optional = false }
+tokio = { version = "1.37", features = ["macros", "rt-multi-thread", "signal", "sync"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sha1 = "0.10"
+hex = "0.4"
+
+[features]
+default = []
+tray = ["dep:gitz-tray"]
+
+[dev-dependencies]
+tempfile = "3.12"
+git2 = "0.19"
+gitz-git = { path = "../gitz-git" }
+tokio = { version = "1.37", features = ["macros", "rt-multi-thread", "time"] }
+
+[[test]]
+name = "integration_test"
+path = "tests/integration_test.rs"

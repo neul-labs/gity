@@ -6,7 +6,7 @@ Gitz ships as a single executable that hosts three faces:
 - **Daemon subcommand** – invoked via `gitz daemon run` to keep the background service alive.
 - **Tray client** – launched with `gitz tray`, surfaces Info/Exit controls.
 
-All three surfaces run unchanged on Windows, macOS, and Linux; the daemon selects the right watcher backend and tray bindings at startup.
+All three surfaces run unchanged on Windows, macOS, and Linux; the daemon selects the right watcher backend and tray bindings at startup. The daemon itself runs inside a Tokio runtime that drives the scheduler ticks and hosts the async-nng server on `tcp://127.0.0.1:7557` (overridable via `GITZ_DAEMON_ADDR`).
 Internally the CLI/tray faces connect to the daemon core through `async-nng` IPC sockets even though they live in the same binary. This keeps the runtime resident while short-lived commands come and go.
 
 ```
@@ -25,7 +25,7 @@ Internally the CLI/tray faces connect to the daemon core through `async-nng` IPC
 
 ### Watch Service
 
-- Uses platform-specific backends (FSEvents, inotify/fanotify, Windows USN Journal).
+- Uses platform-specific backends (FSEvents on macOS, inotify on Linux, ReadDirectoryChangesW on Windows) via the `notify` crate and funnels those events through a unified watcher abstraction.
 - Normalizes events into a canonical change set and immediately updates the metadata store.
 - Emits compact notifications through the async message bus so interested clients can react (e.g., IDEs updating decorations).
 
@@ -54,11 +54,21 @@ Internally the CLI/tray faces connect to the daemon core through `async-nng` IPC
 - `gitz tray` launches a minimal UI that polls daemon info and exposes Info/Exit menu items; Info opens a summary window while Exit signals the daemon to shut down gracefully.
 - These faces contain no Git logic; they marshal user intent, auto-start the daemon if needed, and render responses/logs.
 
+## Local State Layout
+
+- `$GITZ_HOME` controls where the runtime stores everything; defaults to `~/.gitz` on POSIX and `%APPDATA%\Gitz` on Windows.
+- Subdirectories:
+  - `config/` – reserved for future editable settings.
+  - `data/sled/` – sled database containing repo metadata, job queues, and metrics.
+  - `logs/daemon.log` – plain-text log with lifecycle events and future diagnostics.
+- CLI invocations create the directory tree on demand so even first-time commands succeed without manual setup.
+
 ## Repository Registration
 
 1. `gitz register /repo/path` records the repo inside `sled`, storing `.git` path, ignore config digest, and watcher tokens.
 2. The runtime spawns a watcher + scheduler pair dedicated to that repo.
 3. Registrations are local-only. Removing a repo via `gitz unregister` deletes its sled keys but does not touch remote services.
+4. As part of registration/unregistration we edit the repo’s `.git/config` to enable fsmonitor hooks, untracked-cache, commit-graph optimizations, and partial-clone settings for `origin`; unregistering removes those entries so repos stay clean.
 
 ## Data Flow
 
@@ -66,11 +76,13 @@ Internally the CLI/tray faces connect to the daemon core through `async-nng` IPC
 2. **Observe** – Watch Service streams filesystem changes; for every event it:
    - Writes the new state into `sled`.
    - Publishes an `IndexDelta` message containing the paths that changed.
+   - Marks the touched paths “dirty” so `gitz status` can report cached results immediately.
 3. **Answer commands** – When a client asks for `status`, the daemon:
    - Looks up the latest `generation`.
    - Computes “suspect paths” using cached metadata and ignore rules.
-   - Runs targeted `git status -- <paths>` calls if verification is needed.
-4. **Prefetch** – Scheduler triggers `git fetch --filter=blob:none` according to configured cadence, then enqueues maintenance jobs.
+   - Runs targeted `git status -- <paths>` (or a full status if necessary) and records the resulting dirty list.
+   - Returns the new generation token so clients can cache the output and skip redundant Git calls when nothing has changed.
+4. **Prefetch** – Scheduler triggers `git maintenance run --task=prefetch` according to configured cadence, fetching into `refs/prefetch/` without updating local refs.
 5. **Replication** – If the same repo is registered in multiple locations on this machine, `rykv` mirrors `sled` buckets tagged as shareable so warm caches can be reused without re-reading the filesystem.
 6. **Introspection** – Resource metrics and structured logs are written to sled-backed rings so `gitz list --stats`, `gitz logs`, and the tray Info panel can query them without touching the filesystem.
 
@@ -91,7 +103,7 @@ Internally the CLI/tray faces connect to the daemon core through `async-nng` IPC
 ## Background Triggers
 
 - **Event-driven** – Watcher deltas enqueue verification tasks immediately.
-- **Idle-time** – After N minutes of inactivity (configurable), the scheduler runs `git fetch --filter=blob:none`, `git maintenance run --task=commit-graph`, and optional `git gc --auto`.
+- **Idle-time** – After N minutes of inactivity (configurable), the scheduler runs `git maintenance run --task=prefetch` followed by `git maintenance run --auto` which handles commit-graph, loose-objects, and incremental-repack as needed.
 - **Branch changes** – Watching `.git/refs` notifies the runtime whenever HEAD moves. The scheduler records the new branch tip, invalidates conflicting caches, and can opportunistically fetch the corresponding upstream remote.
 - **Manual commands** – `gitz prefetch now`, `gitz maintain`, `gitz health`, and related subcommands insert jobs at the front of the queue or request diagnostic snapshots.
 - **Resource budgets** – If the resource monitor reports high usage, the scheduler may delay prefetch jobs; when usage returns to normal, deferred jobs resume automatically.
