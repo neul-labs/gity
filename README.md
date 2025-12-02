@@ -2,7 +2,22 @@
 
 **Make large Git repositories feel instant.**
 
-Gitz is a lightweight daemon that accelerates Git operations on large repositories. It watches your files, maintains warm caches, and runs background maintenance—so `git status` and other commands stay fast even in repos with millions of files.
+Gitz is a lightweight, cross-platform daemon that accelerates Git operations on large repositories. A single binary runs on **Linux**, **macOS**, and **Windows**—watching your files, maintaining warm caches, and running background maintenance so `git status` stays fast even in repos with millions of files.
+
+[![Cross-platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-blue)]()
+[![Rust](https://img.shields.io/badge/rust-1.75%2B-orange)]()
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)]()
+
+## Cross-Platform Support
+
+| Platform | File Watcher | Status |
+|----------|--------------|--------|
+| **Linux** | inotify | ✅ Full support |
+| **macOS** | FSEvents | ✅ Full support |
+| **Windows** | ReadDirectoryChangesW | ✅ Full support |
+| **WSL2** | inotify (Linux FS only) | ⚠️ [See notes](docs/fsmonitor.md#wsl2-windows-subsystem-for-linux) |
+
+One binary, same features everywhere. No platform-specific configuration needed.
 
 ## The Problem
 
