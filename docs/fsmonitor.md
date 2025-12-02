@@ -362,6 +362,83 @@ Windows has a 260-character path limit (MAX_PATH) by default.
 HKLM\SYSTEM\CurrentControlSet\Control\FileSystem\LongPathsEnabled = 1
 ```
 
+### WSL2 (Windows Subsystem for Linux)
+
+WSL2 has significant file system notification limitations that affect gitz:
+
+**Scenario 1: Repo on Windows filesystem (`/mnt/c/...`)**
+
+```
+Windows (NTFS)          WSL2 (Linux)
+┌──────────────┐       ┌──────────────┐
+│ C:\code\repo │ ←───→ │ /mnt/c/code/ │
+│              │  9P   │    repo      │
+└──────────────┘       └──────────────┘
+```
+
+- Files accessed via `/mnt/c/` use the 9P protocol
+- **inotify does NOT work** across this boundary
+- File changes made in Windows are invisible to Linux watchers
+- File changes made in WSL2 may have delayed/missing notifications
+
+**Result**: Gitz running in WSL2 watching `/mnt/c/...` will miss most events.
+
+**Scenario 2: Repo on Linux filesystem (`~/code/...`)**
+
+```
+WSL2 (ext4)             Windows
+┌──────────────┐       ┌──────────────┐
+│ ~/code/repo  │ ←───→ │ \\wsl$\...   │
+│              │       │              │
+└──────────────┘       └──────────────┘
+```
+
+- Files on the Linux filesystem (ext4) work correctly with inotify
+- **Gitz works properly** when repo is on Linux filesystem
+- Accessing from Windows via `\\wsl$\` doesn't affect Linux-side watching
+
+**Result**: Gitz works correctly.
+
+**Scenario 3: Mixed access patterns**
+
+If you edit files from both Windows and WSL2:
+- Windows editors modifying Linux filesystem files → events detected
+- WSL2 tools modifying Windows filesystem files → events may be missed
+
+**Recommendations**:
+
+| Workflow | Recommendation |
+|----------|----------------|
+| Repo on `/mnt/c/`, edit in Windows | Run gitz natively on Windows |
+| Repo on `/mnt/c/`, edit in WSL2 | Move repo to Linux filesystem |
+| Repo on `~/`, edit in WSL2 | Works correctly |
+| Repo on `~/`, edit in Windows via `\\wsl$\` | Works correctly |
+
+**Best practice for WSL2**:
+
+```bash
+# Clone repos to Linux filesystem, not /mnt/c/
+cd ~
+git clone https://github.com/org/repo.git
+gitz register ~/repo  # Works correctly
+
+# Avoid this:
+gitz register /mnt/c/Users/me/repo  # Will miss events!
+```
+
+**Detecting WSL2**:
+
+```bash
+# Check if running in WSL
+if grep -qi microsoft /proc/version; then
+    echo "Running in WSL"
+fi
+
+# Check filesystem type
+df -T /path/to/repo | grep -E "9p|drvfs"  # Windows filesystem
+df -T /path/to/repo | grep ext4           # Linux filesystem (good)
+```
+
 ### Docker and Containers
 
 File events may not propagate correctly through Docker bind mounts:
@@ -374,6 +451,18 @@ File events may not propagate correctly through Docker bind mounts:
 | NFS/network | Unreliable |
 
 **Recommendation**: Run gitz inside the container if using bind mounts on macOS/Windows, or disable fsmonitor for containerized workflows.
+
+### Docker in WSL2
+
+When running Docker Desktop with WSL2 backend:
+
+```
+Windows → Docker Desktop → WSL2 → Container
+```
+
+- Bind mounts from Windows (`-v C:\code:/app`) have the same 9P limitations
+- Bind mounts from WSL2 Linux filesystem (`-v ~/code:/app`) work better
+- For best results, keep repos on WSL2 Linux filesystem
 
 ### Concurrent Git Operations
 

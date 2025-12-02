@@ -234,6 +234,20 @@ gitz health /path/to/repo  # Shows if reconciliation is needed
 git status                  # Triggers full scan if needed
 ```
 
+### WSL2: Events not working
+
+If using WSL2, file watching only works for repos on the **Linux filesystem**:
+
+```bash
+# Good - works correctly
+gitz register ~/code/repo
+
+# Bad - inotify doesn't work across 9P filesystem
+gitz register /mnt/c/Users/me/repo
+```
+
+See [docs/fsmonitor.md](docs/fsmonitor.md#wsl2-windows-subsystem-for-linux) for details.
+
 ## Contributing
 
 1. Read [docs/process.md](docs/process.md) for conventions

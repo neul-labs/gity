@@ -131,9 +131,86 @@ async fn run_generic_command(
     command: DaemonCommand,
     address: &str,
 ) -> Result<(), CliError> {
+    // Warn about problematic filesystem configurations before registration
+    if let DaemonCommand::RegisterRepo { ref repo_path } = command {
+        warn_if_problematic_filesystem(repo_path);
+    }
     let response = request_with_restart(client, address, command).await?;
     println!("{}", format_response(&response));
     Ok(())
+}
+
+/// Warn users if the repository is on a filesystem where file watching may not work.
+#[allow(unused_variables)]
+fn warn_if_problematic_filesystem(repo_path: &Path) {
+    // Check for WSL2 + Windows filesystem (9P/drvfs)
+    #[cfg(target_os = "linux")]
+    {
+        if is_wsl() && is_windows_filesystem(repo_path) {
+            eprintln!("⚠️  Warning: Repository is on a Windows filesystem (/mnt/...)");
+            eprintln!("   File watching via inotify does NOT work across the WSL2/Windows boundary.");
+            eprintln!("   For best results, move the repository to the Linux filesystem:");
+            eprintln!("     git clone <url> ~/code/repo");
+            eprintln!("     gitz register ~/code/repo");
+            eprintln!();
+            eprintln!("   See: docs/fsmonitor.md#wsl2-windows-subsystem-for-linux");
+            eprintln!();
+        }
+    }
+
+    // Check for network filesystems
+    #[cfg(target_os = "linux")]
+    {
+        if is_network_filesystem(repo_path) {
+            eprintln!("⚠️  Warning: Repository appears to be on a network filesystem.");
+            eprintln!("   File watching may be unreliable. Consider disabling fsmonitor:");
+            eprintln!("     git config core.fsmonitor false");
+            eprintln!();
+        }
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn is_wsl() -> bool {
+    std::fs::read_to_string("/proc/version")
+        .map(|v| v.to_lowercase().contains("microsoft"))
+        .unwrap_or(false)
+}
+
+#[cfg(target_os = "linux")]
+fn is_windows_filesystem(path: &Path) -> bool {
+    // Check if path starts with /mnt/ (typical WSL mount point for Windows drives)
+    let path_str = path.to_string_lossy();
+    if path_str.starts_with("/mnt/") && path_str.len() > 5 {
+        // /mnt/c, /mnt/d, etc.
+        let after_mnt = &path_str[5..];
+        if let Some(first_char) = after_mnt.chars().next() {
+            if first_char.is_ascii_alphabetic() {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+#[cfg(target_os = "linux")]
+fn is_network_filesystem(path: &Path) -> bool {
+    use std::process::Command;
+    // Use df to check filesystem type
+    if let Ok(output) = Command::new("df")
+        .arg("-T")
+        .arg(path)
+        .output()
+    {
+        let stdout = String::from_utf8_lossy(&output.stdout).to_lowercase();
+        // Common network filesystem types
+        return stdout.contains("nfs")
+            || stdout.contains("cifs")
+            || stdout.contains("smb")
+            || stdout.contains("sshfs")
+            || stdout.contains("fuse.sshfs");
+    }
+    false
 }
 
 async fn run_list_command(address: &str, stats: bool) -> Result<(), CliError> {
