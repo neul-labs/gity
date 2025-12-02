@@ -112,7 +112,9 @@ impl From<CliJobKind> for JobKind {
 #[derive(Debug)]
 pub enum CliAction {
     Rpc(DaemonCommand),
-    List { stats: bool },
+    List {
+        stats: bool,
+    },
     Logs {
         repo_path: PathBuf,
         follow: bool,
@@ -127,7 +129,9 @@ pub enum CliAction {
     RunDaemon,
     StartDaemon,
     StopDaemon,
-    OneshotDaemon { repo_path: PathBuf },
+    OneshotDaemon {
+        repo_path: PathBuf,
+    },
     RunTray,
 }
 
@@ -142,12 +146,12 @@ impl Cli {
             }
             Commands::List { stats } => CliAction::List { stats },
             Commands::Events => CliAction::StreamEvents,
-            Commands::Changed { repo_path, since } => CliAction::Rpc(
-                DaemonCommand::FsMonitorSnapshot {
+            Commands::Changed { repo_path, since } => {
+                CliAction::Rpc(DaemonCommand::FsMonitorSnapshot {
                     repo_path,
                     last_seen_generation: since,
-                },
-            ),
+                })
+            }
             Commands::Logs {
                 repo_path,
                 follow,
@@ -157,23 +161,23 @@ impl Cli {
                 follow,
                 limit,
             },
-            Commands::FsmonitorHelper { version, token, repo } => {
-                CliAction::FsMonitorHelper {
-                    version,
-                    token,
-                    repo,
-                }
-            }
+            Commands::FsmonitorHelper {
+                version,
+                token,
+                repo,
+            } => CliAction::FsMonitorHelper {
+                version,
+                token,
+                repo,
+            },
             Commands::Status { repo_path } => CliAction::Rpc(DaemonCommand::Status {
                 repo_path,
                 known_generation: None,
             }),
-            Commands::Prefetch { repo_path, now: _ } => {
-                CliAction::Rpc(DaemonCommand::QueueJob {
-                    repo_path,
-                    job: JobKind::Prefetch,
-                })
-            }
+            Commands::Prefetch { repo_path, now: _ } => CliAction::Rpc(DaemonCommand::QueueJob {
+                repo_path,
+                job: JobKind::Prefetch,
+            }),
             Commands::Maintain { repo_path } => CliAction::Rpc(DaemonCommand::QueueJob {
                 repo_path,
                 job: JobKind::Maintenance,
@@ -308,15 +312,16 @@ fn format_health(health: &DaemonHealth) -> String {
 }
 
 fn format_repo_health(detail: &RepoHealthDetail) -> String {
-    let mut lines = vec![format!(
-        "Health report for {}",
-        detail.repo_path.display()
-    )];
+    let mut lines = vec![format!("Health report for {}", detail.repo_path.display())];
     lines.push(format!("  generation: {}", detail.generation));
     lines.push(format!("  pending jobs: {}", detail.pending_jobs));
     lines.push(format!(
         "  watcher: {}",
-        if detail.watcher_active { "active" } else { "inactive" }
+        if detail.watcher_active {
+            "active"
+        } else {
+            "inactive"
+        }
     ));
     if let Some(last_event) = detail.last_event {
         let timestamp = last_event
@@ -334,11 +339,19 @@ fn format_repo_health(detail: &RepoHealthDetail) -> String {
     ));
     lines.push(format!(
         "  needs reconciliation: {}",
-        if detail.needs_reconciliation { "yes" } else { "no" }
+        if detail.needs_reconciliation {
+            "yes"
+        } else {
+            "no"
+        }
     ));
     lines.push(format!(
         "  throttling: {}",
-        if detail.throttling_active { "active" } else { "off" }
+        if detail.throttling_active {
+            "active"
+        } else {
+            "off"
+        }
     ));
     if let Some(next_job) = &detail.next_scheduled_job {
         lines.push(format!("  next scheduled job: {}", next_job));
@@ -459,7 +472,7 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use gitz_ipc::{
-        DaemonHealth, DaemonResponse, DaemonMetrics, FsMonitorSnapshot, JobKind, JobMetrics,
+        DaemonHealth, DaemonMetrics, DaemonResponse, FsMonitorSnapshot, JobKind, JobMetrics,
         RepoStatus, RepoStatusDetail, RepoSummary,
     };
     use std::collections::HashMap;
@@ -573,9 +586,7 @@ mod tests {
             .await
             .expect("list command succeeds");
         assert!(output.message.contains("/tmp/demo"));
-        assert!(output
-            .message
-            .contains("[1 jobs, status idle, gen 0]"));
+        assert!(output.message.contains("[1 jobs, status idle, gen 0]"));
     }
 
     #[test]

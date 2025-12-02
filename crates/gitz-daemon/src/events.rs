@@ -1,12 +1,12 @@
 use async_nng::AsyncSocket;
 use gitz_ipc::DaemonNotification;
 use nng::{
-    options::{protocol::pubsub::Subscribe, Options},
     Protocol,
+    options::{Options, protocol::pubsub::Subscribe},
 };
 use tokio::sync::mpsc;
 
-use crate::{map_client_error, DaemonError, ServerError, Shutdown};
+use crate::{DaemonError, ServerError, Shutdown, map_client_error};
 
 /// Publishes daemon notifications over a PUB socket.
 pub struct NotificationServer {

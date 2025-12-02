@@ -5,11 +5,11 @@ mod status_cache;
 use clap::Parser;
 use gitz_cli::{format_repo_status, format_response, Cli, CliAction, CliError};
 use gitz_daemon::{
-    NotificationServer, NotificationSubscriber, NngClient, NngServer, Runtime, ServerError,
+    NngClient, NngServer, NotificationServer, NotificationSubscriber, Runtime, ServerError,
 };
 use gitz_ipc::{
-    DaemonCommand, DaemonError, DaemonNotification, DaemonResponse, DaemonService, DaemonHealth,
-    JobEventKind, RepoStatusDetail, WatchEventKind,
+    DaemonCommand, DaemonError, DaemonNotification, DaemonResponse, DaemonService, JobEventKind,
+    RepoStatusDetail, WatchEventKind,
 };
 use gitz_storage::{StorageContext, StorageError};
 use std::{
@@ -22,7 +22,7 @@ use std::{
 use tokio::{
     pin, signal,
     sync::mpsc,
-    time::{Duration, sleep},
+    time::{sleep, Duration},
 };
 
 use crate::{daemon_launcher::spawn_daemon, paths::GitzPaths, status_cache::StatusCache};
@@ -82,7 +82,7 @@ async fn run_client_action(
 
 #[cfg(feature = "tray")]
 async fn run_tray(address: &str) -> Result<(), CliError> {
-    use gitz_tray::{GitzTray, TrayConfig, run_tray_loop};
+    use gitz_tray::{run_tray_loop, GitzTray, TrayConfig};
 
     // Make sure daemon is running first
     ensure_daemon_running(address).await?;
@@ -148,7 +148,9 @@ fn warn_if_problematic_filesystem(repo_path: &Path) {
     {
         if is_wsl() && is_windows_filesystem(repo_path) {
             eprintln!("⚠️  Warning: Repository is on a Windows filesystem (/mnt/...)");
-            eprintln!("   File watching via inotify does NOT work across the WSL2/Windows boundary.");
+            eprintln!(
+                "   File watching via inotify does NOT work across the WSL2/Windows boundary."
+            );
             eprintln!("   For best results, move the repository to the Linux filesystem:");
             eprintln!("     git clone <url> ~/code/repo");
             eprintln!("     gitz register ~/code/repo");
@@ -197,11 +199,7 @@ fn is_windows_filesystem(path: &Path) -> bool {
 fn is_network_filesystem(path: &Path) -> bool {
     use std::process::Command;
     // Use df to check filesystem type
-    if let Ok(output) = Command::new("df")
-        .arg("-T")
-        .arg(path)
-        .output()
-    {
+    if let Ok(output) = Command::new("df").arg("-T").arg(path).output() {
         let stdout = String::from_utf8_lossy(&output.stdout).to_lowercase();
         // Common network filesystem types
         return stdout.contains("nfs")
@@ -235,9 +233,7 @@ async fn run_fsmonitor_helper(
         )));
     }
     let repo_path = resolve_repo_path(repo_override)?;
-    let known_generation = token
-        .as_deref()
-        .and_then(|value| value.parse::<u64>().ok());
+    let known_generation = token.as_deref().and_then(|value| value.parse::<u64>().ok());
     let client = NngClient::new(address.to_string());
     let response = request_with_restart(
         &client,
@@ -299,9 +295,7 @@ async fn run_logs_command(
 async fn run_event_stream(address: &str) -> Result<(), CliError> {
     let subscriber = NotificationSubscriber::new(address.to_string());
     let mut stream = subscriber.connect().await.map_err(CliError::Daemon)?;
-    println!(
-        "listening for daemon notifications on {address} (Ctrl+C to exit)..."
-    );
+    println!("listening for daemon notifications on {address} (Ctrl+C to exit)...");
     loop {
         tokio::select! {
             _ = signal::ctrl_c() => break,
@@ -317,7 +311,10 @@ async fn run_event_stream(address: &str) -> Result<(), CliError> {
 async fn follow_log_stream(address: &str, repo_path: PathBuf) -> Result<(), CliError> {
     let subscriber = NotificationSubscriber::new(address.to_string());
     let mut stream = subscriber.connect().await.map_err(CliError::Daemon)?;
-    println!("following logs for {} (Ctrl+C to exit)...", repo_path.display());
+    println!(
+        "following logs for {} (Ctrl+C to exit)...",
+        repo_path.display()
+    );
     loop {
         tokio::select! {
             _ = signal::ctrl_c() => break,
@@ -360,7 +357,9 @@ async fn run_start_daemon(address: &str) -> Result<(), CliError> {
             }
         }
     }
-    Err(CliError::Message("timed out waiting for daemon to start".into()))
+    Err(CliError::Message(
+        "timed out waiting for daemon to start".into(),
+    ))
 }
 
 async fn run_stop_daemon(address: &str) -> Result<(), CliError> {
@@ -390,12 +389,8 @@ async fn run_oneshot_daemon(
     let helper_command = fsmonitor_helper_command();
 
     let (notification_tx, notification_rx) = mpsc::unbounded_channel();
-    let runtime = Runtime::with_notifications(
-        store,
-        Some(notification_tx),
-        helper_command,
-        Some(log_tree),
-    );
+    let runtime =
+        Runtime::with_notifications(store, Some(notification_tx), helper_command, Some(log_tree));
     let shutdown = runtime.shutdown_signal();
     let shared = runtime.shared();
     let service = runtime.service_handle();
@@ -566,7 +561,10 @@ fn resolve_status_decision(
                 StatusDecision {
                     stdout: format!(
                         "{}",
-                        format_response(&DaemonResponse::RepoStatusUnchanged { repo_path, generation })
+                        format_response(&DaemonResponse::RepoStatusUnchanged {
+                            repo_path,
+                            generation
+                        })
                     ),
                     stderr: None,
                     to_cache: None,
@@ -634,8 +632,7 @@ async fn run_daemon(address: String, events_address: String) -> Result<(), CliEr
     let runtime_fut = runtime.run();
     let server = NngServer::new(address.clone(), shared, shutdown.clone());
     let server_fut = server.run();
-    let notification_server =
-        NotificationServer::new(events_address.clone(), notification_rx);
+    let notification_server = NotificationServer::new(events_address.clone(), notification_rx);
     let notification_fut = notification_server.run(shutdown.clone());
 
     pin!(runtime_fut);
@@ -672,7 +669,9 @@ async fn run_daemon(address: String, events_address: String) -> Result<(), CliEr
         return Err(CliError::Message(format!("daemon server error: {err}")));
     }
     if let Some(Err(err)) = notification_result {
-        return Err(CliError::Message(format!("notification server error: {err}")));
+        return Err(CliError::Message(format!(
+            "notification server error: {err}"
+        )));
     }
     append_daemon_log(paths.daemon_log_path(), "Daemon shutdown complete")?;
     Ok(())
@@ -767,10 +766,7 @@ fn resolve_repo_path(repo_override: Option<PathBuf>) -> Result<PathBuf, CliError
     env::current_dir().map_err(map_io_error)
 }
 
-fn emit_fsmonitor_payload(
-    _version: u8,
-    snapshot: &gitz_ipc::FsMonitorSnapshot,
-) -> io::Result<()> {
+fn emit_fsmonitor_payload(_version: u8, snapshot: &gitz_ipc::FsMonitorSnapshot) -> io::Result<()> {
     let mut stdout = io::stdout().lock();
     stdout.write_all(snapshot.generation.to_string().as_bytes())?;
     stdout.write_all(b"\0")?;

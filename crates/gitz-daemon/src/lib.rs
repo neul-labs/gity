@@ -2,8 +2,13 @@ mod events;
 mod logs;
 mod metrics;
 
+use crate::{
+    logs::LogBook,
+    metrics::{MetricsRegistry, collect_resource_snapshot},
+};
 use async_nng::AsyncSocket;
 use async_trait::async_trait;
+pub use events::{NotificationServer, NotificationStream, NotificationSubscriber};
 use gitz_git::{RepoConfigurator, working_tree_status};
 use gitz_ipc::{
     Ack, DaemonCommand, DaemonError, DaemonHealth, DaemonNotification, DaemonResponse,
@@ -33,11 +38,6 @@ use tokio::{
     sync::{Notify, mpsc},
     task::JoinHandle,
     time::sleep,
-};
-pub use events::{NotificationServer, NotificationStream, NotificationSubscriber};
-use crate::{
-    logs::LogBook,
-    metrics::{collect_resource_snapshot, MetricsRegistry},
 };
 use tracing::{error, info, warn};
 
@@ -183,7 +183,12 @@ impl<S: MetadataStore> Daemon<S> {
             }
             DaemonCommand::QueueJob { repo_path, job } => {
                 self.scheduler.enqueue(repo_path.clone(), job.clone());
-                send_job_notification(&self.notifications, &repo_path, job.clone(), JobEventKind::Queued);
+                send_job_notification(
+                    &self.notifications,
+                    &repo_path,
+                    job.clone(),
+                    JobEventKind::Queued,
+                );
                 match self.store.increment_jobs(&repo_path, 1) {
                     Ok(_) => DaemonResponse::Ack(Ack::new(format!("queued {:?}", job))),
                     Err(err) => err_response(err),
@@ -267,12 +272,8 @@ impl<S: MetadataStore> Daemon<S> {
                 let entries = self.logs.recent(&repo_path, limit);
                 DaemonResponse::Logs(entries)
             }
-            DaemonCommand::RepoHealth { repo_path } => {
-                self.compute_repo_health(&repo_path)
-            }
-            DaemonCommand::Shutdown => {
-                DaemonResponse::Ack(Ack::new("shutdown requested"))
-            }
+            DaemonCommand::RepoHealth { repo_path } => self.compute_repo_health(&repo_path),
+            DaemonCommand::Shutdown => DaemonResponse::Ack(Ack::new("shutdown requested")),
         }
     }
 
@@ -283,14 +284,11 @@ impl<S: MetadataStore> Daemon<S> {
                 return DaemonResponse::Error(format!(
                     "repository not registered: {}",
                     repo_path.display()
-                ))
+                ));
             }
             Err(err) => return err_response(err),
         };
-        let dirty_path_count = self
-            .store
-            .dirty_path_count(repo_path)
-            .unwrap_or(0);
+        let dirty_path_count = self.store.dirty_path_count(repo_path).unwrap_or(0);
         DaemonResponse::RepoHealth(RepoHealthDetail {
             repo_path: repo_path.to_path_buf(),
             generation: meta.generation,
@@ -320,7 +318,6 @@ impl<S: MetadataStore> Daemon<S> {
             let _ = tx.send(DaemonNotification::RepoStatus(detail.clone()));
         }
     }
-
 }
 
 fn repo_summary(meta: RepoMetadata) -> RepoSummary {
@@ -405,7 +402,10 @@ fn is_git_internal_path(path: &Path) -> bool {
 
 /// Filter out `.git` internal paths for fsmonitor output.
 fn filter_working_tree_paths(paths: Vec<PathBuf>) -> Vec<PathBuf> {
-    paths.into_iter().filter(|p| !is_git_internal_path(p)).collect()
+    paths
+        .into_iter()
+        .filter(|p| !is_git_internal_path(p))
+        .collect()
 }
 
 fn should_track(kind: &WatchEventKind) -> bool {
@@ -438,10 +438,7 @@ fn send_job_notification(
     }
 }
 
-fn send_log_notification(
-    notifications: &Option<NotificationSender>,
-    entry: &LogEntry,
-) {
+fn send_log_notification(notifications: &Option<NotificationSender>, entry: &LogEntry) {
     if let Some(tx) = notifications {
         let _ = tx.send(DaemonNotification::Log(entry.clone()));
     }
@@ -494,8 +491,8 @@ pub struct IdleScheduleConfig {
 impl Default for IdleScheduleConfig {
     fn default() -> Self {
         Self {
-            prefetch_idle_secs: 300,     // 5 minutes
-            maintenance_idle_secs: 600,  // 10 minutes
+            prefetch_idle_secs: 300,    // 5 minutes
+            maintenance_idle_secs: 600, // 10 minutes
             enabled: true,
         }
     }
@@ -689,10 +686,7 @@ impl<S: MetadataStore> Runtime<S> {
             let _ = guard.store.mark_dirty_path(repo_path, PathBuf::from("."));
         }
 
-        info!(
-            "scheduled reconciliation scan for {}",
-            repo_path.display()
-        );
+        info!("scheduled reconciliation scan for {}", repo_path.display());
     }
 
     fn check_idle_schedules(&self) {
@@ -710,7 +704,9 @@ impl<S: MetadataStore> Runtime<S> {
         };
 
         for repo in repos {
-            let state = states.entry(repo.clone()).or_insert_with(RepoIdleState::new);
+            let state = states
+                .entry(repo.clone())
+                .or_insert_with(RepoIdleState::new);
             let idle = state.idle_duration();
 
             // Schedule prefetch if idle long enough
@@ -862,7 +858,12 @@ impl<S: MetadataStore> Runtime<S> {
         let logs = self.logs.clone();
         let entry = logs.record(&job.repo_path, format!("job {:?} started", job.kind));
         send_log_notification(&notifications, &entry);
-        send_job_notification(&notifications, &job.repo_path, job.kind, JobEventKind::Started);
+        send_job_notification(
+            &notifications,
+            &job.repo_path,
+            job.kind,
+            JobEventKind::Started,
+        );
         tokio::spawn(async move {
             let start = Instant::now();
             let result = JobExecutor::run(&job).await;
@@ -986,7 +987,6 @@ impl<S: MetadataStore> Runtime<S> {
         let entry = self.logs.record(repo_path, message);
         send_log_notification(&self.notifications, &entry);
     }
-
 }
 
 struct WatchRegistration {
@@ -1004,7 +1004,11 @@ impl JobExecutor {
                 // - Fetches into refs/prefetch/ namespace (doesn't update local refs)
                 // - Is safe to run in background without disrupting user
                 // - Handles multiple remotes correctly
-                Self::run_git(&job.repo_path, &["maintenance", "run", "--task=prefetch", "--quiet"]).await
+                Self::run_git(
+                    &job.repo_path,
+                    &["maintenance", "run", "--task=prefetch", "--quiet"],
+                )
+                .await
             }
             JobKind::Maintenance => {
                 // Run maintenance with --auto to let Git decide what needs running
@@ -1273,9 +1277,7 @@ mod tests {
         match response {
             DaemonResponse::FsMonitorSnapshot(snapshot) => {
                 assert_eq!(snapshot.repo_path, repo);
-                assert!(snapshot
-                    .dirty_paths
-                    .contains(&PathBuf::from("file.txt")));
+                assert!(snapshot.dirty_paths.contains(&PathBuf::from("file.txt")));
                 assert!(snapshot.generation > 0);
             }
             other => panic!("unexpected response: {other:?}"),

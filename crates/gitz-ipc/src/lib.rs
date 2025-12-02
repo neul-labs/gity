@@ -338,8 +338,7 @@ mod tests {
             job: JobKind::Prefetch,
             kind: JobEventKind::Started,
         });
-        let serialized =
-            serde_json::to_string(&notification).expect("serialize job notification");
+        let serialized = serde_json::to_string(&notification).expect("serialize job notification");
         let roundtrip: DaemonNotification =
             serde_json::from_str(&serialized).expect("deserialize job notification");
         assert_eq!(notification, roundtrip);

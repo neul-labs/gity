@@ -54,19 +54,17 @@ impl GitzTray {
         // Set up menu event handler
         let running_clone = Arc::clone(&running);
         let daemon_address = config.daemon_address;
-        std::thread::spawn(move || {
-            loop {
-                if let Ok(event) = MenuEvent::receiver().recv() {
-                    match event.id.0.as_str() {
-                        INFO_ID => {
-                            handle_info_action(&daemon_address);
-                        }
-                        EXIT_ID => {
-                            running_clone.store(false, Ordering::SeqCst);
-                            break;
-                        }
-                        _ => {}
+        std::thread::spawn(move || loop {
+            if let Ok(event) = MenuEvent::receiver().recv() {
+                match event.id.0.as_str() {
+                    INFO_ID => {
+                        handle_info_action(&daemon_address);
                     }
+                    EXIT_ID => {
+                        running_clone.store(false, Ordering::SeqCst);
+                        break;
+                    }
+                    _ => {}
                 }
             }
         });
@@ -113,14 +111,13 @@ fn load_icon() -> Result<tray_icon::Icon, TrayError> {
 
     // Fill with a blue color
     for i in 0..((width * height) as usize) {
-        rgba[i * 4] = 64;      // R
+        rgba[i * 4] = 64; // R
         rgba[i * 4 + 1] = 128; // G
         rgba[i * 4 + 2] = 255; // B
         rgba[i * 4 + 3] = 255; // A
     }
 
-    tray_icon::Icon::from_rgba(rgba, width, height)
-        .map_err(|e| TrayError::Creation(e.to_string()))
+    tray_icon::Icon::from_rgba(rgba, width, height).map_err(|e| TrayError::Creation(e.to_string()))
 }
 
 fn handle_info_action(daemon_address: &str) {
@@ -172,7 +169,6 @@ fn show_notification(title: &str, message: &str) {
 #[cfg(target_os = "linux")]
 pub fn run_tray_loop(tray: &GitzTray) {
     use gtk::glib;
-    use gtk::prelude::*;
 
     if gtk::init().is_err() {
         eprintln!("Failed to initialize GTK");
@@ -226,6 +222,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(target_os = "macos", ignore = "muda requires main thread on macOS")]
     fn menu_creates_successfully() {
         let menu = create_menu();
         assert!(menu.is_ok());

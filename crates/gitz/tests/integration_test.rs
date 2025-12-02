@@ -8,8 +8,8 @@
 //! - Job scheduling and execution
 
 use git2::{Repository, Signature};
-use gitz_daemon::{Runtime, NngServer, NngClient};
-use gitz_git::{RepoConfigurator, working_tree_status};
+use gitz_daemon::{NngClient, NngServer, Runtime};
+use gitz_git::{working_tree_status, RepoConfigurator};
 use gitz_ipc::{DaemonCommand, DaemonResponse, DaemonService, FsMonitorSnapshot, JobKind};
 use gitz_storage::{InMemoryMetadataStore, MetadataStore, SledMetadataStore};
 use std::fs;
@@ -29,7 +29,9 @@ fn create_test_repo(dir: &Path) -> Repository {
 
     {
         let mut index = repo.index().expect("get index");
-        index.add_path(Path::new("README.md")).expect("add to index");
+        index
+            .add_path(Path::new("README.md"))
+            .expect("add to index");
         index.write().expect("write index");
 
         let tree_id = index.write_tree().expect("write tree");
@@ -172,7 +174,9 @@ fn test_register_real_repo_in_memory_store() {
     let _repo = create_test_repo(dir.path());
 
     let store = InMemoryMetadataStore::new();
-    let meta = store.register_repo(dir.path().to_path_buf()).expect("register");
+    let meta = store
+        .register_repo(dir.path().to_path_buf())
+        .expect("register");
 
     assert_eq!(meta.repo_path, dir.path());
     assert_eq!(meta.pending_jobs, 0);
@@ -186,7 +190,9 @@ fn test_register_real_repo_in_sled_store() {
     let db_dir = TempDir::new().unwrap();
     let store = SledMetadataStore::open(db_dir.path()).expect("open sled");
 
-    let meta = store.register_repo(repo_dir.path().to_path_buf()).expect("register");
+    let meta = store
+        .register_repo(repo_dir.path().to_path_buf())
+        .expect("register");
     assert_eq!(meta.repo_path, repo_dir.path());
 
     // Verify persistence
@@ -202,9 +208,15 @@ fn test_dirty_paths_tracked_correctly() {
     store.register_repo(repo_path.clone()).expect("register");
 
     // Mark files dirty
-    store.mark_dirty_path(&repo_path, PathBuf::from("file1.txt")).expect("mark 1");
-    store.mark_dirty_path(&repo_path, PathBuf::from("file2.txt")).expect("mark 2");
-    store.mark_dirty_path(&repo_path, PathBuf::from("file1.txt")).expect("mark dup"); // duplicate
+    store
+        .mark_dirty_path(&repo_path, PathBuf::from("file1.txt"))
+        .expect("mark 1");
+    store
+        .mark_dirty_path(&repo_path, PathBuf::from("file2.txt"))
+        .expect("mark 2");
+    store
+        .mark_dirty_path(&repo_path, PathBuf::from("file1.txt"))
+        .expect("mark dup"); // duplicate
 
     let count = store.dirty_path_count(&repo_path).expect("count");
     assert_eq!(count, 2); // Should dedupe
@@ -526,7 +538,7 @@ async fn test_nng_client_server_with_real_repo() {
 
     // Start server in background
     let server_handle = tokio::spawn(async move {
-        server.run().await;
+        let _ = server.run().await;
     });
 
     // Give server time to start
@@ -698,10 +710,7 @@ fn test_fsmonitor_protocol_output_format() {
     let snapshot = FsMonitorSnapshot {
         repo_path: PathBuf::from("/test/repo"),
         generation: 42,
-        dirty_paths: vec![
-            PathBuf::from("src/main.rs"),
-            PathBuf::from("Cargo.toml"),
-        ],
+        dirty_paths: vec![PathBuf::from("src/main.rs"), PathBuf::from("Cargo.toml")],
     };
 
     // Simulate the output format
@@ -739,7 +748,10 @@ fn test_git_maintenance_command_exists() {
         .output();
 
     // We just verify the command executes - it may fail due to no remote, but that's ok
-    assert!(output.is_ok(), "git maintenance command should be available");
+    assert!(
+        output.is_ok(),
+        "git maintenance command should be available"
+    );
 }
 
 /// Test that git status works in test repo
@@ -759,7 +771,10 @@ fn test_git_status_command_works() {
         .expect("git status should work");
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("README.md"), "git status should show modified file");
+    assert!(
+        stdout.contains("README.md"),
+        "git status should show modified file"
+    );
 }
 
 /// Test that our working_tree_status matches git status output
@@ -841,7 +856,10 @@ fn test_git_config_fsmonitor_setting() {
         .expect("git config after clear");
 
     // Should return error (exit code 1) when key doesn't exist
-    assert!(!output.status.success(), "fsmonitor config should be removed");
+    assert!(
+        !output.status.success(),
+        "fsmonitor config should be removed"
+    );
 }
 
 // =============================================================================
@@ -857,12 +875,24 @@ async fn test_fsmonitor_filters_git_internal_paths() {
     let store = InMemoryMetadataStore::new();
 
     // Manually mark some paths as dirty, including .git internal paths
-    store.register_repo(dir.path().to_path_buf()).expect("register");
-    store.mark_dirty_path(dir.path(), PathBuf::from("README.md")).expect("mark");
-    store.mark_dirty_path(dir.path(), PathBuf::from("src/lib.rs")).expect("mark");
-    store.mark_dirty_path(dir.path(), PathBuf::from(".git/HEAD")).expect("mark");
-    store.mark_dirty_path(dir.path(), PathBuf::from(".git/index")).expect("mark");
-    store.mark_dirty_path(dir.path(), PathBuf::from(".git/refs/heads/main")).expect("mark");
+    store
+        .register_repo(dir.path().to_path_buf())
+        .expect("register");
+    store
+        .mark_dirty_path(dir.path(), PathBuf::from("README.md"))
+        .expect("mark");
+    store
+        .mark_dirty_path(dir.path(), PathBuf::from("src/lib.rs"))
+        .expect("mark");
+    store
+        .mark_dirty_path(dir.path(), PathBuf::from(".git/HEAD"))
+        .expect("mark");
+    store
+        .mark_dirty_path(dir.path(), PathBuf::from(".git/index"))
+        .expect("mark");
+    store
+        .mark_dirty_path(dir.path(), PathBuf::from(".git/refs/heads/main"))
+        .expect("mark");
 
     let runtime = Runtime::new(store, None);
     let service = runtime.service_handle();
@@ -879,14 +909,27 @@ async fn test_fsmonitor_filters_git_internal_paths() {
     match response {
         DaemonResponse::FsMonitorSnapshot(snapshot) => {
             // Should contain working tree paths
-            let has_readme = snapshot.dirty_paths.iter().any(|p| p.ends_with("README.md"));
-            let has_lib = snapshot.dirty_paths.iter().any(|p| p.ends_with("src/lib.rs"));
+            let has_readme = snapshot
+                .dirty_paths
+                .iter()
+                .any(|p| p.ends_with("README.md"));
+            let has_lib = snapshot
+                .dirty_paths
+                .iter()
+                .any(|p| p.ends_with("src/lib.rs"));
             assert!(has_readme, "Should contain README.md");
             assert!(has_lib, "Should contain src/lib.rs");
 
             // Should NOT contain .git internal paths
-            let has_git_head = snapshot.dirty_paths.iter().any(|p| p.to_string_lossy().contains(".git"));
-            assert!(!has_git_head, "Should NOT contain .git paths, but got: {:?}", snapshot.dirty_paths);
+            let has_git_head = snapshot
+                .dirty_paths
+                .iter()
+                .any(|p| p.to_string_lossy().contains(".git"));
+            assert!(
+                !has_git_head,
+                "Should NOT contain .git paths, but got: {:?}",
+                snapshot.dirty_paths
+            );
         }
         other => panic!("unexpected: {:?}", other),
     }
@@ -902,7 +945,8 @@ fn test_branch_switch_detected_via_file_changes() {
     let head = repo.head().expect("head");
     let commit = head.peel_to_commit().expect("commit");
 
-    repo.branch("feature", &commit, false).expect("create branch");
+    repo.branch("feature", &commit, false)
+        .expect("create branch");
 
     // Switch to feature branch
     repo.set_head("refs/heads/feature").expect("set head");
@@ -920,8 +964,15 @@ fn test_branch_switch_detected_via_file_changes() {
         let tree = repo.find_tree(tree_id).expect("find tree");
         let parent = repo.head().expect("head").peel_to_commit().expect("commit");
         let sig = Signature::now("Test", "test@example.com").expect("sig");
-        repo.commit(Some("HEAD"), &sig, &sig, "Feature commit", &tree, &[&parent])
-            .expect("commit");
+        repo.commit(
+            Some("HEAD"),
+            &sig,
+            &sig,
+            "Feature commit",
+            &tree,
+            &[&parent],
+        )
+        .expect("commit");
     }
 
     // Switch back to main/master
@@ -936,7 +987,10 @@ fn test_branch_switch_detected_via_file_changes() {
 
     // After switching, README.md should have original content
     let content = fs::read_to_string(dir.path().join("README.md")).expect("read");
-    assert!(content.contains("# Test Repo"), "Should have original content after branch switch");
+    assert!(
+        content.contains("# Test Repo"),
+        "Should have original content after branch switch"
+    );
 
     // Git status should show clean
     let output = Command::new("git")
@@ -946,5 +1000,9 @@ fn test_branch_switch_detected_via_file_changes() {
         .expect("git status");
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.trim().is_empty(), "Working tree should be clean after checkout: {}", stdout);
+    assert!(
+        stdout.trim().is_empty(),
+        "Working tree should be clean after checkout: {}",
+        stdout
+    );
 }

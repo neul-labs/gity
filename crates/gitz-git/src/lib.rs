@@ -38,7 +38,10 @@ impl RepoConfigurator {
         Ok(Self { repo })
     }
 
-    pub fn apply_performance_settings(&self, fsmonitor_helper: Option<&str>) -> Result<(), GitError> {
+    pub fn apply_performance_settings(
+        &self,
+        fsmonitor_helper: Option<&str>,
+    ) -> Result<(), GitError> {
         let mut config = self.repository_config()?;
         if let Some(helper) = fsmonitor_helper {
             config

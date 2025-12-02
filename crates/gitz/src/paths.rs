@@ -4,6 +4,7 @@ use std::{
 };
 
 /// Centralized helper for resolving config/data/log directories.
+#[allow(dead_code)]
 pub struct GitzPaths {
     base: PathBuf,
     config: PathBuf,
@@ -11,6 +12,7 @@ pub struct GitzPaths {
     logs: PathBuf,
 }
 
+#[allow(dead_code)]
 impl GitzPaths {
     pub fn discover() -> io::Result<Self> {
         let base = resolve_base_dir()?;
