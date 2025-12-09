@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd">
+  <metadata>
+    <id>gity</id>
+    <version>0.1.0</version>
+    <title>Gity</title>
+    <authors>Neul Labs</authors>
+    <owners>Neul Labs</owners>
+    <projectUrl>https://github.com/neul-labs/gity</projectUrl>
+    <licenseUrl>https://github.com/neul-labs/gity/blob/main/LICENSE</licenseUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <projectSourceUrl>https://github.com/neul-labs/gity</projectSourceUrl>
+    <docsUrl>https://github.com/neul-labs/gity#readme</docsUrl>
+    <bugTrackerUrl>https://github.com/neul-labs/gity/issues</bugTrackerUrl>
+    <tags>git fsmonitor performance daemon cli developer-tools</tags>
+    <summary>Make large Git repositories feel instant</summary>
+    <description>
+Gity is a lightweight, cross-platform daemon that accelerates Git operations on large repositories.
+
+Features:
+- Watches your files via OS-native file watchers
+- Implements Git's fsmonitor protocol
+- Runs git maintenance during idle periods
+- Caches status results for instant responses
+
+Quick Start:
+```
+gity register C:\path\to\large-repo
+cd C:\path\to\large-repo
+git status  # Fast!
+```
+    </description>
+    <releaseNotes>https://github.com/neul-labs/gity/blob/main/CHANGELOG.md</releaseNotes>
+  </metadata>
+  <files>
+    <file src="tools\**" target="tools" />
+  </files>
+</package>

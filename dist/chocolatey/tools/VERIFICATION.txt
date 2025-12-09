@@ -1,0 +1,12 @@
+VERIFICATION
+
+Verification is intended to assist the Chocolatey moderators and community
+in verifying that this package's contents are trustworthy.
+
+1. Download the binary from the official GitHub releases:
+   https://github.com/neul-labs/gity/releases/download/v0.1.0/gity-0.1.0-x86_64-pc-windows-msvc.zip
+
+2. Verify the SHA256 checksum matches the one in chocolateyinstall.ps1
+
+3. The package source code is available at:
+   https://github.com/neul-labs/gity

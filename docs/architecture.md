@@ -1,17 +1,17 @@
 # Architecture
 
-Gitz ships as a single executable that hosts three faces:
+Gity ships as a single executable that hosts three faces:
 
-- **CLI** – parses commands like `gitz register`, `gitz list`, etc.
-- **Daemon subcommand** – invoked via `gitz daemon run` to keep the background service alive.
-- **Tray client** – launched with `gitz tray`, surfaces Info/Exit controls.
+- **CLI** – parses commands like `gity register`, `gity list`, etc.
+- **Daemon subcommand** – invoked via `gity daemon run` to keep the background service alive.
+- **Tray client** – launched with `gity tray`, surfaces Info/Exit controls.
 
-All three surfaces run unchanged on Windows, macOS, and Linux; the daemon selects the right watcher backend and tray bindings at startup. The daemon itself runs inside a Tokio runtime that drives the scheduler ticks and hosts the async-nng server on `tcp://127.0.0.1:7557` (overridable via `GITZ_DAEMON_ADDR`).
+All three surfaces run unchanged on Windows, macOS, and Linux; the daemon selects the right watcher backend and tray bindings at startup. The daemon itself runs inside a Tokio runtime that drives the scheduler ticks and hosts the async-nng server on `tcp://127.0.0.1:7557` (overridable via `GITY_DAEMON_ADDR`).
 Internally the CLI/tray faces connect to the daemon core through `async-nng` IPC sockets even though they live in the same binary. This keeps the runtime resident while short-lived commands come and go.
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                      gitz                           │
+│                      gity                           │
 │ ┌─────────┐   async-nng    ┌──────────────────────┐ │
 │ │ CLI     │ ─────────────► │ Daemon Core          │ │
 │ └─────────┘ ◄───────────── │ (watch/schedule/etc) │ │
@@ -32,13 +32,13 @@ Internally the CLI/tray faces connect to the daemon core through `async-nng` IPC
 
 ### FSMonitor Integration
 
-Gitz implements Git's fsmonitor protocol v2. When Git runs `git status`, it asks gitz "what changed since token X?" and gitz responds with only the changed paths.
+Gity implements Git's fsmonitor protocol v2. When Git runs `git status`, it asks gity "what changed since token X?" and gity responds with only the changed paths.
 
 **Critical: Working Tree Path Filtering**
 
 The watcher sees all filesystem events, including changes inside `.git/` (HEAD updates, index changes, ref updates). However, Git's fsmonitor contract expects only **working tree paths**—the `.git` directory is managed by Git itself.
 
-Before responding to fsmonitor queries, gitz filters out all `.git` internal paths:
+Before responding to fsmonitor queries, gity filters out all `.git` internal paths:
 
 ```rust
 fn is_git_internal_path(path: &Path) -> bool {
@@ -69,19 +69,19 @@ See [fsmonitor.md](fsmonitor.md) for complete protocol details and edge cases.
 ### Resource Monitor
 
 - Samples per-repo and global CPU, RSS, open file descriptors, sled cache usage, and queue depths.
-- Exposes metrics via REQ handlers so commands like `gitz list --stats` can print resource info.
+- Exposes metrics via REQ handlers so commands like `gity list --stats` can print resource info.
 - Applies back-pressure: when thresholds are exceeded, the monitor pauses low-priority jobs or reduces watcher aggressiveness until conditions recover.
 
 ### CLI & Tray Layers
 
 - Each CLI invocation connects over async-nng REQ/REP sockets and multiplexes streaming updates via PUB/SUB.
-- Commands (`gitz list`, `gitz status`, `gitz logs`, etc.) map directly onto daemon handlers documented in `docs/commands.md`.
-- `gitz tray` launches a minimal UI that polls daemon info and exposes Info/Exit menu items; Info opens a summary window while Exit signals the daemon to shut down gracefully.
+- Commands (`gity list`, `gity status`, `gity logs`, etc.) map directly onto daemon handlers documented in `docs/commands.md`.
+- `gity tray` launches a minimal UI that polls daemon info and exposes Info/Exit menu items; Info opens a summary window while Exit signals the daemon to shut down gracefully.
 - These faces contain no Git logic; they marshal user intent, auto-start the daemon if needed, and render responses/logs.
 
 ## Local State Layout
 
-- `$GITZ_HOME` controls where the runtime stores everything; defaults to `~/.gitz` on POSIX and `%APPDATA%\Gitz` on Windows.
+- `$GITY_HOME` controls where the runtime stores everything; defaults to `~/.gity` on POSIX and `%APPDATA%\Gity` on Windows.
 - Subdirectories:
   - `config/` – reserved for future editable settings.
   - `data/sled/` – sled database containing repo metadata, job queues, and metrics.
@@ -90,9 +90,9 @@ See [fsmonitor.md](fsmonitor.md) for complete protocol details and edge cases.
 
 ## Repository Registration
 
-1. `gitz register /repo/path` records the repo inside `sled`, storing `.git` path, ignore config digest, and watcher tokens.
+1. `gity register /repo/path` records the repo inside `sled`, storing `.git` path, ignore config digest, and watcher tokens.
 2. The runtime spawns a watcher + scheduler pair dedicated to that repo.
-3. Registrations are local-only. Removing a repo via `gitz unregister` deletes its sled keys but does not touch remote services.
+3. Registrations are local-only. Removing a repo via `gity unregister` deletes its sled keys but does not touch remote services.
 4. As part of registration/unregistration we edit the repo’s `.git/config` to enable fsmonitor hooks, untracked-cache, commit-graph optimizations, and partial-clone settings for `origin`; unregistering removes those entries so repos stay clean.
 
 ## Data Flow
@@ -101,7 +101,7 @@ See [fsmonitor.md](fsmonitor.md) for complete protocol details and edge cases.
 2. **Observe** – Watch Service streams filesystem changes; for every event it:
    - Writes the new state into `sled`.
    - Publishes an `IndexDelta` message containing the paths that changed.
-   - Marks the touched paths “dirty” so `gitz status` can report cached results immediately.
+   - Marks the touched paths “dirty” so `gity status` can report cached results immediately.
 3. **Answer commands** – When a client asks for `status`, the daemon:
    - Looks up the latest `generation`.
    - Computes “suspect paths” using cached metadata and ignore rules.
@@ -109,7 +109,7 @@ See [fsmonitor.md](fsmonitor.md) for complete protocol details and edge cases.
    - Returns the new generation token so clients can cache the output and skip redundant Git calls when nothing has changed.
 4. **Prefetch** – Scheduler triggers `git maintenance run --task=prefetch` according to configured cadence, fetching into `refs/prefetch/` without updating local refs.
 5. **Replication** – If the same repo is registered in multiple locations on this machine, `rykv` mirrors `sled` buckets tagged as shareable so warm caches can be reused without re-reading the filesystem.
-6. **Introspection** – Resource metrics and structured logs are written to sled-backed rings so `gitz list --stats`, `gitz logs`, and the tray Info panel can query them without touching the filesystem.
+6. **Introspection** – Resource metrics and structured logs are written to sled-backed rings so `gity list --stats`, `gity logs`, and the tray Info panel can query them without touching the filesystem.
 
 ## Restart & Catch-up
 
@@ -130,7 +130,7 @@ See [fsmonitor.md](fsmonitor.md) for complete protocol details and edge cases.
 - **Event-driven** – Watcher deltas enqueue verification tasks immediately.
 - **Idle-time** – After N minutes of inactivity (configurable), the scheduler runs `git maintenance run --task=prefetch` followed by `git maintenance run --auto` which handles commit-graph, loose-objects, and incremental-repack as needed.
 - **Branch changes** – When Git switches branches, the working tree files are updated by checkout. The watcher detects these working tree changes and marks them dirty. The `.git/HEAD` and `.git/refs` changes are seen by the watcher but filtered from fsmonitor output (see FSMonitor Integration above).
-- **Manual commands** – `gitz prefetch now`, `gitz maintain`, `gitz health`, and related subcommands insert jobs at the front of the queue or request diagnostic snapshots.
+- **Manual commands** – `gity prefetch now`, `gity maintain`, `gity health`, and related subcommands insert jobs at the front of the queue or request diagnostic snapshots.
 - **Resource budgets** – If the resource monitor reports high usage, the scheduler may delay prefetch jobs; when usage returns to normal, deferred jobs resume automatically.
 
 ## Failure Handling

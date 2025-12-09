@@ -1,0 +1,16 @@
+Source: gity
+Section: devel
+Priority: optional
+Maintainer: Neul Labs <info@neul-labs.com>
+Build-Depends: debhelper (>= 11)
+Standards-Version: 4.5.0
+Homepage: https://github.com/neul-labs/gity
+
+Package: gity
+Architecture: amd64 arm64
+Depends: ${shlibs:Depends}, ${misc:Depends}, git (>= 2.37)
+Description: Make large Git repositories feel instant
+ Gity is a lightweight, cross-platform daemon that accelerates Git
+ operations on large repositories. It watches your files, implements
+ Git's fsmonitor protocol, runs background maintenance, and caches
+ status results for instant responses.

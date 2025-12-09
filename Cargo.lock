@@ -1236,18 +1236,18 @@ dependencies = [
 ]
 
 [[package]]
-name = "gitz"
+name = "gity"
 version = "0.1.0"
 dependencies = [
  "clap",
  "dirs 5.0.1",
  "git2",
- "gitz-cli",
- "gitz-daemon",
- "gitz-git",
- "gitz-ipc",
- "gitz-storage",
- "gitz-tray",
+ "gity-cli",
+ "gity-daemon",
+ "gity-git",
+ "gity-ipc",
+ "gity-storage",
+ "gity-tray",
  "hex",
  "libc",
  "serde",
@@ -1258,28 +1258,28 @@ dependencies = [
 ]
 
 [[package]]
-name = "gitz-cli"
+name = "gity-cli"
 version = "0.1.0"
 dependencies = [
  "async-trait",
  "clap",
- "gitz-ipc",
+ "gity-ipc",
  "thiserror 1.0.69",
  "tokio",
 ]
 
 [[package]]
-name = "gitz-daemon"
+name = "gity-daemon"
 version = "0.1.0"
 dependencies = [
  "async-nng",
  "async-trait",
  "bincode",
  "git2",
- "gitz-git",
- "gitz-ipc",
- "gitz-storage",
- "gitz-watch",
+ "gity-git",
+ "gity-ipc",
+ "gity-storage",
+ "gity-watch",
  "nng",
  "serde",
  "sled",
@@ -1292,7 +1292,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "gitz-git"
+name = "gity-git"
 version = "0.1.0"
 dependencies = [
  "git2",
@@ -1301,7 +1301,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "gitz-ipc"
+name = "gity-ipc"
 version = "0.1.0"
 dependencies = [
  "async-trait",
@@ -1311,11 +1311,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "gitz-storage"
+name = "gity-storage"
 version = "0.1.0"
 dependencies = [
  "bincode",
- "gitz-ipc",
+ "gity-ipc",
  "serde",
  "sled",
  "tempfile",
@@ -1323,11 +1323,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "gitz-tray"
+name = "gity-tray"
 version = "0.1.0"
 dependencies = [
- "gitz-daemon",
- "gitz-ipc",
+ "gity-daemon",
+ "gity-ipc",
  "gtk",
  "image",
  "muda",
@@ -1339,7 +1339,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "gitz-watch"
+name = "gity-watch"
 version = "0.1.0"
 dependencies = [
  "async-trait",

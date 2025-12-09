@@ -50,9 +50,9 @@ CI will mirror those commands plus platform smoke tests (Linux, macOS, Windows).
 
 ## Support & Operations
 
-- The daemon ships with a `gitz health` command that checks sled integrity, async-nng socket status, watcher subscriptions, and resource budgets.
+- The daemon ships with a `gity health` command that checks sled integrity, async-nng socket status, watcher subscriptions, and resource budgets.
 - For production-like deployments (CI workers, shared dev VMs), enable `rykv` replication so cache warmups happen once.
-- File issues with repro steps, logs (`RUST_LOG=info gitz daemon run`), and platform details.
-- Keep the repo registry clean: `gitz register` must be run once per repo path, and `gitz unregister` should follow when a working copy is deleted to avoid stale watchers.
+- File issues with repro steps, logs (`RUST_LOG=info gity daemon run`), and platform details.
+- Keep the repo registry clean: `gity register` must be run once per repo path, and `gity unregister` should follow when a working copy is deleted to avoid stale watchers.
 
 Following these rules ensures contributions land smoothly and the sidecar remains trustworthy across giant repositories.

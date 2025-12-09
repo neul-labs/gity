@@ -1,0 +1,33 @@
+[package]
+name = "gity-tray"
+version = "0.1.0"
+edition = "2021"
+authors = ["Neul Labs"]
+description = "Cross-platform system tray UI for gity"
+documentation = "https://docs.rs/gity-tray"
+homepage = "https://github.com/neul-labs/gity"
+repository = "https://github.com/neul-labs/gity"
+license = "MIT"
+keywords = ["tray", "gui", "system-tray"]
+categories = ["gui"]
+
+[dependencies]
+gity-ipc = { version = "0.1.0", path = "../gity-ipc" }
+gity-daemon = { version = "0.1.0", path = "../gity-daemon" }
+
+tray-icon = "0.19"
+muda = "0.15"
+image = "0.25"
+tokio = { version = "1", features = ["rt", "sync", "macros"] }
+thiserror = "1"
+tracing = "0.1"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# Linux uses GTK for the event loop
+gtk = "0.18"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+winit = "0.30"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+winit = "0.30"

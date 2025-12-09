@@ -1,0 +1,13 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "gity"
+
+begin
+  binary = Gity.ensure_binary
+  exec(binary, *ARGV)
+rescue => e
+  warn "Error: #{e.message}"
+  warn "You can install manually from: https://github.com/neul-labs/gity/releases"
+  exit 1
+end

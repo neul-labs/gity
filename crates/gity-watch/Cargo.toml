@@ -1,0 +1,21 @@
+[package]
+name = "gity-watch"
+version = "0.1.0"
+edition = "2021"
+authors = ["Neul Labs"]
+description = "Cross-platform file system watcher for gity"
+documentation = "https://docs.rs/gity-watch"
+homepage = "https://github.com/neul-labs/gity"
+repository = "https://github.com/neul-labs/gity"
+license = "MIT"
+keywords = ["watcher", "filesystem", "inotify", "fsevents"]
+categories = ["filesystem"]
+
+[dependencies]
+async-trait = "0.1"
+notify = { version = "6.1", default-features = true }
+thiserror = "1.0"
+tokio = { version = "1.37", features = ["sync", "rt", "time"] }
+
+[dev-dependencies]
+tempfile = "3.12"

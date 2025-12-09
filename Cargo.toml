@@ -1,12 +1,12 @@
 [workspace]
 members = [
-    "crates/gitz",
-    "crates/gitz-cli",
-    "crates/gitz-daemon",
-    "crates/gitz-git",
-    "crates/gitz-ipc",
-    "crates/gitz-storage",
-    "crates/gitz-tray",
-    "crates/gitz-watch",
+    "crates/gity",
+    "crates/gity-cli",
+    "crates/gity-daemon",
+    "crates/gity-git",
+    "crates/gity-ipc",
+    "crates/gity-storage",
+    "crates/gity-tray",
+    "crates/gity-watch",
 ]
 resolver = "2"

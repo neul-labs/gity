@@ -1,12 +1,12 @@
 # FSMonitor Integration
 
-This document describes how gitz integrates with Git's fsmonitor feature to accelerate `git status` and related commands.
+This document describes how gity integrates with Git's fsmonitor feature to accelerate `git status` and related commands.
 
 ## Overview
 
 Git's fsmonitor feature allows an external process to tell Git which files have changed since the last query. Instead of Git scanning every file in the working tree, it asks the fsmonitor "what changed?" and only examines those files.
 
-Gitz implements the fsmonitor protocol by:
+Gity implements the fsmonitor protocol by:
 
 1. Running a file watcher that tracks all filesystem changes
 2. Maintaining a dirty paths cache with generation tokens
@@ -14,14 +14,14 @@ Gitz implements the fsmonitor protocol by:
 
 ## Protocol
 
-Gitz implements **fsmonitor protocol version 2** (Git 2.37+).
+Gity implements **fsmonitor protocol version 2** (Git 2.37+).
 
 ### Query Format
 
 Git invokes the fsmonitor helper with:
 
 ```
-gitz fsmonitor-helper <version> <token>
+gity fsmonitor-helper <version> <token>
 ```
 
 - `version`: Protocol version (must be `2`)
@@ -46,17 +46,17 @@ If nothing changed, the response is just:
 
 ### Token Semantics
 
-Gitz uses a **generation counter** as the token:
+Gity uses a **generation counter** as the token:
 
 - Each filesystem event increments the generation
-- When Git queries with an old generation, gitz returns all paths that changed since then
-- When Git queries with the current generation and nothing changed, gitz returns an empty path list
+- When Git queries with an old generation, gity returns all paths that changed since then
+- When Git queries with the current generation and nothing changed, gity returns an empty path list
 
 ## Implementation Details
 
 ### File Watching
 
-Gitz watches the repository directory recursively using the `notify` crate:
+Gity watches the repository directory recursively using the `notify` crate:
 
 | Platform | Backend |
 |----------|---------|
@@ -73,7 +73,7 @@ The watcher monitors:
 
 **Important**: Git's fsmonitor only expects paths in the **working tree**. The `.git` directory is managed by Git itself and should never be reported to fsmonitor.
 
-When a file changes, gitz:
+When a file changes, gity:
 
 1. Records the event with its relative path
 2. Marks the path as dirty in the metadata store
@@ -99,7 +99,7 @@ When you run `git checkout <branch>`:
 1. Git updates `.git/HEAD` to point to the new branch
 2. Git checks out files from the new branch tip
 3. The file watcher sees both `.git` changes and working tree changes
-4. Gitz filters out `.git` paths and reports only working tree changes
+4. Gity filters out `.git` paths and reports only working tree changes
 5. Git receives the correct list of files that need re-verification
 
 This works correctly because:
@@ -136,18 +136,18 @@ The generation increments:
 
 If the daemon was offline (machine sleep, daemon restart), file events may have been missed. On startup:
 
-1. Gitz checks if the watcher token matches the stored token
+1. Gity checks if the watcher token matches the stored token
 2. If there's drift, it marks the repo as needing reconciliation
 3. The next query triggers a full working tree scan
 4. After reconciliation, normal watching resumes
 
 ## Git Configuration
 
-When you run `gitz register`, it configures:
+When you run `gity register`, it configures:
 
 ```ini
 [core]
-    fsmonitor = gitz fsmonitor-helper
+    fsmonitor = gity fsmonitor-helper
     untrackedCache = true
 
 [feature]
@@ -156,31 +156,31 @@ When you run `gitz register`, it configures:
 
 These settings enable:
 
-- `fsmonitor`: Use gitz as the fsmonitor provider
+- `fsmonitor`: Use gity as the fsmonitor provider
 - `untrackedCache`: Cache untracked file lists (complements fsmonitor)
 - `manyFiles`: Optimizations for large repos (index v4, etc.)
 
-Run `gitz unregister` to remove these settings.
+Run `gity unregister` to remove these settings.
 
 ## Edge Cases
 
 ### Git LFS
 
-Gitz works alongside Git LFS but doesn't coordinate with it:
+Gity works alongside Git LFS but doesn't coordinate with it:
 
 - **LFS pointer files** are tracked like normal files
 - **LFS smudge/clean filters** run during checkout independently
-- **Large file downloads** happen when Git needs the content, not during gitz prefetch
+- **Large file downloads** happen when Git needs the content, not during gity prefetch
 
-**Recommendation**: Gitz accelerates status checks; LFS handles large file storage. They operate at different layers and don't conflict, but gitz won't pre-fetch LFS objects.
+**Recommendation**: Gity accelerates status checks; LFS handles large file storage. They operate at different layers and don't conflict, but gity won't pre-fetch LFS objects.
 
 ### .gitignore and Ignored Files
 
-Gitz reports **all changed paths** to Git's fsmonitor, including files that would be ignored:
+Gity reports **all changed paths** to Git's fsmonitor, including files that would be ignored:
 
 ```
 .gitignore contains: *.log
-app.log changes → gitz reports it → Git filters it out
+app.log changes → gity reports it → Git filters it out
 ```
 
 This is correct behavior:
@@ -192,7 +192,7 @@ This is correct behavior:
 
 Submodules have their own `.git` directory (either inline or via `.git` file pointing to `../.git/modules/`).
 
-Gitz handles submodules by filtering paths containing `.git`:
+Gity handles submodules by filtering paths containing `.git`:
 
 ```rust
 fn is_git_internal_path(path: &Path) -> bool {
@@ -204,7 +204,7 @@ This filters:
 - `submodule/.git/HEAD` → filtered (submodule internals)
 - `submodule/src/lib.rs` → reported (submodule working tree)
 
-**Note**: Submodules are excluded from gitz's `working_tree_status` calls (`.exclude_submodules(true)`). Each submodule should be registered separately if you want acceleration.
+**Note**: Submodules are excluded from gity's `working_tree_status` calls (`.exclude_submodules(true)`). Each submodule should be registered separately if you want acceleration.
 
 ### Nested Git Repositories
 
@@ -220,7 +220,7 @@ myproject/
         └── src/
 ```
 
-Gitz filters `vendor/somelib/.git/*` paths but reports `vendor/somelib/src/*` changes. However:
+Gity filters `vendor/somelib/.git/*` paths but reports `vendor/somelib/src/*` changes. However:
 
 - **The nested repo won't get fsmonitor acceleration** unless separately registered
 - **Changes to the nested repo appear as changes to the parent**
@@ -232,7 +232,7 @@ Gitz filters `vendor/somelib/.git/*` paths but reports `vendor/somelib/src/*` ch
 When files change rapidly (build systems, file generators):
 
 - Events are batched by the OS watcher backend
-- Gitz coalesces rapid changes to the same path
+- Gity coalesces rapid changes to the same path
 - The generation advances once per batch, not per event
 
 ### Symlinks
@@ -244,11 +244,11 @@ Symlink behavior depends on the platform:
 
 ### Case Sensitivity
 
-Gitz preserves path case as reported by the filesystem. On case-insensitive filesystems (Windows, macOS default), Git handles case normalization.
+Gity preserves path case as reported by the filesystem. On case-insensitive filesystems (Windows, macOS default), Git handles case normalization.
 
 ### Network Filesystems
 
-Gitz relies on OS file notification APIs, which may not work reliably on network filesystems:
+Gity relies on OS file notification APIs, which may not work reliably on network filesystems:
 
 - NFS: Limited support, may miss events
 - SMB/CIFS: Works on Windows, unreliable on Unix
@@ -262,11 +262,11 @@ git config core.fsmonitor false
 
 ### Git Worktrees
 
-Each worktree is a separate working directory sharing the same `.git` object store. Gitz treats each worktree as an independent repository:
+Each worktree is a separate working directory sharing the same `.git` object store. Gity treats each worktree as an independent repository:
 
 ```bash
-gitz register /path/to/main-worktree
-gitz register /path/to/feature-worktree
+gity register /path/to/main-worktree
+gity register /path/to/feature-worktree
 ```
 
 Worktrees share object data but have independent:
@@ -280,9 +280,9 @@ This is the correct behavior—each worktree has its own filesystem state.
 
 With `git sparse-checkout`, only a subset of files are materialized in the working tree.
 
-**Current behavior**: Gitz watches and reports all materialized files. Non-materialized files don't exist on disk, so no events occur.
+**Current behavior**: Gity watches and reports all materialized files. Non-materialized files don't exist on disk, so no events occur.
 
-**Potential issue**: If sparse patterns change, gitz doesn't know which paths are now relevant. Git handles this correctly because it tracks sparse patterns internally.
+**Potential issue**: If sparse patterns change, gity doesn't know which paths are now relevant. Git handles this correctly because it tracks sparse patterns internally.
 
 **Recommendation**: After changing sparse patterns, the next `git status` will reconcile correctly. No special handling needed.
 
@@ -290,9 +290,9 @@ With `git sparse-checkout`, only a subset of files are materialized in the worki
 
 With `git clone --filter=blob:none`, blob objects are fetched on demand.
 
-**Current behavior**: Gitz prefetch uses `git maintenance run --task=prefetch`, which respects partial clone settings and doesn't fetch filtered objects.
+**Current behavior**: Gity prefetch uses `git maintenance run --task=prefetch`, which respects partial clone settings and doesn't fetch filtered objects.
 
-**Note**: Status checks may trigger blob fetches if Git needs to compare content. This is Git's behavior, not gitz's.
+**Note**: Status checks may trigger blob fetches if Git needs to compare content. This is Git's behavior, not gity's.
 
 ### File Moves and Renames
 
@@ -319,7 +319,7 @@ Hard links can cause issues:
 If the watched repository directory is deleted or moved:
 - The watcher will error and stop
 - Subsequent commands will fail with "repo not found"
-- Run `gitz unregister` to clean up
+- Run `gity unregister` to clean up
 
 ### Linux inotify Watch Limits
 
@@ -341,7 +341,7 @@ echo "fs.inotify.max_user_watches=524288" | sudo tee -a /etc/sysctl.conf
 
 ### macOS FSEvents Latency
 
-FSEvents on macOS has inherent latency (~300ms-1s). File changes may not be immediately visible to gitz.
+FSEvents on macOS has inherent latency (~300ms-1s). File changes may not be immediately visible to gity.
 
 **Impact**: `git status` immediately after saving may use stale cache. Running again will be correct.
 
@@ -364,7 +364,7 @@ HKLM\SYSTEM\CurrentControlSet\Control\FileSystem\LongPathsEnabled = 1
 
 ### WSL2 (Windows Subsystem for Linux)
 
-WSL2 has significant file system notification limitations that affect gitz:
+WSL2 has significant file system notification limitations that affect gity:
 
 **Scenario 1: Repo on Windows filesystem (`/mnt/c/...`)**
 
@@ -381,7 +381,7 @@ Windows (NTFS)          WSL2 (Linux)
 - File changes made in Windows are invisible to Linux watchers
 - File changes made in WSL2 may have delayed/missing notifications
 
-**Result**: Gitz running in WSL2 watching `/mnt/c/...` will miss most events.
+**Result**: Gity running in WSL2 watching `/mnt/c/...` will miss most events.
 
 **Scenario 2: Repo on Linux filesystem (`~/code/...`)**
 
@@ -394,10 +394,10 @@ WSL2 (ext4)             Windows
 ```
 
 - Files on the Linux filesystem (ext4) work correctly with inotify
-- **Gitz works properly** when repo is on Linux filesystem
+- **Gity works properly** when repo is on Linux filesystem
 - Accessing from Windows via `\\wsl$\` doesn't affect Linux-side watching
 
-**Result**: Gitz works correctly.
+**Result**: Gity works correctly.
 
 **Scenario 3: Mixed access patterns**
 
@@ -409,7 +409,7 @@ If you edit files from both Windows and WSL2:
 
 | Workflow | Recommendation |
 |----------|----------------|
-| Repo on `/mnt/c/`, edit in Windows | Run gitz natively on Windows |
+| Repo on `/mnt/c/`, edit in Windows | Run gity natively on Windows |
 | Repo on `/mnt/c/`, edit in WSL2 | Move repo to Linux filesystem |
 | Repo on `~/`, edit in WSL2 | Works correctly |
 | Repo on `~/`, edit in Windows via `\\wsl$\` | Works correctly |
@@ -420,10 +420,10 @@ If you edit files from both Windows and WSL2:
 # Clone repos to Linux filesystem, not /mnt/c/
 cd ~
 git clone https://github.com/org/repo.git
-gitz register ~/repo  # Works correctly
+gity register ~/repo  # Works correctly
 
 # Avoid this:
-gitz register /mnt/c/Users/me/repo  # Will miss events!
+gity register /mnt/c/Users/me/repo  # Will miss events!
 ```
 
 **Detecting WSL2**:
@@ -450,7 +450,7 @@ File events may not propagate correctly through Docker bind mounts:
 | Named volume | Events work inside container only |
 | NFS/network | Unreliable |
 
-**Recommendation**: Run gitz inside the container if using bind mounts on macOS/Windows, or disable fsmonitor for containerized workflows.
+**Recommendation**: Run gity inside the container if using bind mounts on macOS/Windows, or disable fsmonitor for containerized workflows.
 
 ### Docker in WSL2
 
@@ -479,11 +479,11 @@ Pre-commit hooks that modify files (formatters, linters) cause rapid changes:
 
 1. You run `git commit`
 2. Pre-commit modifies files
-3. Gitz sees the modifications
+3. Gity sees the modifications
 4. Commit proceeds (or fails)
 5. Next status reflects final state
 
-This works correctly—gitz just sees the filesystem changes.
+This works correctly—gity just sees the filesystem changes.
 
 ## Debugging
 
@@ -491,23 +491,23 @@ This works correctly—gitz just sees the filesystem changes.
 
 ```bash
 git config core.fsmonitor
-# Should output: gitz fsmonitor-helper
+# Should output: gity fsmonitor-helper
 ```
 
 ### Test the helper directly
 
 ```bash
 # First query (no token)
-gitz fsmonitor-helper 2 ""
+gity fsmonitor-helper 2 ""
 
 # Subsequent query (with token from previous response)
-gitz fsmonitor-helper 2 "42"
+gity fsmonitor-helper 2 "42"
 ```
 
 ### Check daemon health
 
 ```bash
-gitz health /path/to/repo
+gity health /path/to/repo
 ```
 
 Shows:
@@ -520,7 +520,7 @@ Shows:
 ### View real-time events
 
 ```bash
-gitz events
+gity events
 ```
 
 Streams all file watcher events as they occur.

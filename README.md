@@ -1,8 +1,8 @@
-# Gitz
+# Gity
 
 **Make large Git repositories feel instant.**
 
-Gitz is a lightweight, cross-platform daemon that accelerates Git operations on large repositories. A single binary runs on **Linux**, **macOS**, and **Windows**—watching your files, maintaining warm caches, and running background maintenance so `git status` stays fast even in repos with millions of files.
+Gity is a lightweight, cross-platform daemon that accelerates Git operations on large repositories. A single binary runs on **Linux**, **macOS**, and **Windows**—watching your files, maintaining warm caches, and running background maintenance so `git status` stays fast even in repos with millions of files.
 
 [![Cross-platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-blue)]()
 [![Rust](https://img.shields.io/badge/rust-1.75%2B-orange)]()
@@ -33,7 +33,7 @@ This happens because Git must scan the entire working tree, check file timestamp
 
 ## The Solution
 
-Gitz runs a background daemon that:
+Gity runs a background daemon that:
 
 1. **Watches your files** — Detects changes instantly via OS-native file watchers (inotify, FSEvents, ReadDirectoryChangesW)
 2. **Tells Git what changed** — Implements Git's fsmonitor protocol so Git only checks files that actually changed
@@ -46,10 +46,10 @@ The result: `git status` in milliseconds instead of seconds.
 
 ```bash
 # Install
-cargo install --path crates/gitz
+cargo install --path crates/gity
 
 # Register your large repo (one-time setup)
-gitz register /path/to/large-repo
+gity register /path/to/large-repo
 
 # That's it! Git commands are now accelerated
 cd /path/to/large-repo
@@ -59,10 +59,10 @@ git status  # Fast!
 The daemon starts automatically when needed. For manual control:
 
 ```bash
-gitz daemon start   # Start in background
-gitz daemon stop    # Stop gracefully
-gitz list           # See registered repos
-gitz health <repo>  # Check repo health
+gity daemon start   # Start in background
+gity daemon stop    # Stop gracefully
+gity list           # See registered repos
+gity health <repo>  # Check repo health
 ```
 
 ## Use Cases
@@ -72,7 +72,7 @@ gitz health <repo>  # Check repo health
 You work in a large monorepo with thousands of packages. Every `git status` takes 10+ seconds, breaking your flow.
 
 ```bash
-gitz register ~/work/monorepo
+gity register ~/work/monorepo
 cd ~/work/monorepo
 git status  # Now instant
 ```
@@ -82,9 +82,9 @@ git status  # Now instant
 You have several worktrees of the same repo for parallel feature development.
 
 ```bash
-gitz register ~/projects/app
-gitz register ~/projects/app-feature-x
-gitz register ~/projects/app-bugfix-y
+gity register ~/projects/app
+gity register ~/projects/app-feature-x
+gity register ~/projects/app-bugfix-y
 # Caches are shared between related repos on the same machine
 ```
 
@@ -93,18 +93,18 @@ gitz register ~/projects/app-bugfix-y
 Your CI builds clone large repos and run status checks. Use oneshot mode to accelerate without a persistent daemon:
 
 ```bash
-gitz daemon oneshot /path/to/repo
+gity daemon oneshot /path/to/repo
 git status
 git diff --cached
 ```
 
 ### IDE Integration
 
-IDEs constantly poll `git status` for file decorations. With gitz, these polls return instantly:
+IDEs constantly poll `git status` for file decorations. With gity, these polls return instantly:
 
 ```bash
 # IDE calls this repeatedly
-git status --porcelain  # Returns in <10ms with gitz
+git status --porcelain  # Returns in <10ms with gity
 ```
 
 ## How It Works
@@ -116,7 +116,7 @@ git status --porcelain  # Returns in <10ms with gitz
 │       │                                                  │
 │       ▼                                                  │
 │  ┌─────────┐    "what changed?"    ┌─────────────────┐  │
-│  │   Git   │ ───────────────────►  │  gitz daemon    │  │
+│  │   Git   │ ───────────────────►  │  gity daemon    │  │
 │  │         │ ◄─────────────────── │                 │  │
 │  └─────────┘    "only foo.rs"      │  • file watcher │  │
 │       │                            │  • dirty cache  │  │
@@ -126,17 +126,17 @@ git status --porcelain  # Returns in <10ms with gitz
 └─────────────────────────────────────────────────────────┘
 ```
 
-When you register a repo, gitz:
+When you register a repo, gity:
 
 1. Starts watching the working tree for file changes
-2. Configures Git to use `gitz fsmonitor-helper` as the fsmonitor
+2. Configures Git to use `gity fsmonitor-helper` as the fsmonitor
 3. Tracks which files changed since the last query
 4. Schedules background `git maintenance` during idle periods
 
 When Git runs `git status`:
 
 1. Git asks the fsmonitor "what changed since token X?"
-2. Gitz returns only the files that actually changed
+2. Gity returns only the files that actually changed
 3. Git scans just those files instead of the entire tree
 
 See [docs/architecture.md](docs/architecture.md) for the full technical deep-dive.
@@ -145,16 +145,16 @@ See [docs/architecture.md](docs/architecture.md) for the full technical deep-div
 
 | Command | Description |
 |---------|-------------|
-| `gitz register <path>` | Start accelerating a repository |
-| `gitz unregister <path>` | Stop accelerating and clean up |
-| `gitz list [--stats]` | Show registered repos and health |
-| `gitz status <path>` | Fast status summary |
-| `gitz health <path>` | Detailed diagnostics |
-| `gitz prefetch <path>` | Trigger background fetch |
-| `gitz maintain <path>` | Trigger maintenance tasks |
-| `gitz daemon start` | Start daemon in background |
-| `gitz daemon stop` | Stop daemon gracefully |
-| `gitz tray` | Launch system tray UI |
+| `gity register <path>` | Start accelerating a repository |
+| `gity unregister <path>` | Stop accelerating and clean up |
+| `gity list [--stats]` | Show registered repos and health |
+| `gity status <path>` | Fast status summary |
+| `gity health <path>` | Detailed diagnostics |
+| `gity prefetch <path>` | Trigger background fetch |
+| `gity maintain <path>` | Trigger maintenance tasks |
+| `gity daemon start` | Start daemon in background |
+| `gity daemon stop` | Stop daemon gracefully |
+| `gity tray` | Launch system tray UI |
 
 See [docs/commands.md](docs/commands.md) for complete reference.
 
@@ -169,7 +169,7 @@ See [docs/commands.md](docs/commands.md) for complete reference.
 ### From Source
 
 ```bash
-cargo install --path crates/gitz
+cargo install --path crates/gity
 ```
 
 ### Platform Packages
@@ -180,10 +180,10 @@ cargo install --path crates/gitz
 
 ## Configuration
 
-Gitz stores data in `$GITZ_HOME` (defaults to `~/.gitz` on Unix, `%APPDATA%\Gitz` on Windows):
+Gity stores data in `$GITY_HOME` (defaults to `~/.gity` on Unix, `%APPDATA%\Gity` on Windows):
 
 ```
-~/.gitz/
+~/.gity/
 ├── data/
 │   ├── sled/           # Metadata database
 │   └── status_cache/   # Cached status results
@@ -195,8 +195,8 @@ Environment variables:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `GITZ_HOME` | Data directory | `~/.gitz` |
-| `GITZ_DAEMON_ADDR` | IPC address | `tcp://127.0.0.1:7557` |
+| `GITY_HOME` | Data directory | `~/.gity` |
+| `GITY_DAEMON_ADDR` | IPC address | `tcp://127.0.0.1:7557` |
 
 ## Documentation
 
@@ -215,15 +215,15 @@ Environment variables:
 Check that the repo is registered and healthy:
 
 ```bash
-gitz list
-gitz health /path/to/repo
+gity list
+gity health /path/to/repo
 ```
 
 Verify fsmonitor is configured:
 
 ```bash
 git config core.fsmonitor
-# Should show: gitz fsmonitor-helper
+# Should show: gity fsmonitor-helper
 ```
 
 ### Daemon won't start
@@ -231,7 +231,7 @@ git config core.fsmonitor
 Check logs:
 
 ```bash
-cat ~/.gitz/logs/daemon.log
+cat ~/.gity/logs/daemon.log
 ```
 
 Verify the port is available:
@@ -245,7 +245,7 @@ lsof -i :7557
 The file watcher might have missed events (can happen after sleep/hibernate). Force a refresh:
 
 ```bash
-gitz health /path/to/repo  # Shows if reconciliation is needed
+gity health /path/to/repo  # Shows if reconciliation is needed
 git status                  # Triggers full scan if needed
 ```
 
@@ -255,10 +255,10 @@ If using WSL2, file watching only works for repos on the **Linux filesystem**:
 
 ```bash
 # Good - works correctly
-gitz register ~/code/repo
+gity register ~/code/repo
 
 # Bad - inotify doesn't work across 9P filesystem
-gitz register /mnt/c/Users/me/repo
+gity register /mnt/c/Users/me/repo
 ```
 
 See [docs/fsmonitor.md](docs/fsmonitor.md#wsl2-windows-subsystem-for-linux) for details.

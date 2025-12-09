@@ -1,0 +1,41 @@
+{
+  "name": "gity",
+  "version": "0.1.0",
+  "description": "Make large Git repositories feel instant - a lightweight daemon that accelerates Git operations",
+  "keywords": [
+    "git",
+    "fsmonitor",
+    "performance",
+    "daemon",
+    "cli"
+  ],
+  "homepage": "https://github.com/neul-labs/gity",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/neul-labs/gity.git"
+  },
+  "license": "MIT",
+  "author": "Neul Labs",
+  "bin": {
+    "gity": "bin/gity"
+  },
+  "scripts": {
+    "postinstall": "node scripts/install.js"
+  },
+  "engines": {
+    "node": ">=14"
+  },
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ],
+  "files": [
+    "bin/",
+    "scripts/"
+  ]
+}
