@@ -1,0 +1,77 @@
+site_name: Gity Documentation
+site_description: Make large Git repositories feel instant
+site_url: https://gity.dev/docs
+repo_url: https://github.com/yourusername/gity
+repo_name: gity
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.highlight
+    - search.share
+    - content.code.copy
+    - content.tabs.link
+
+nav:
+  - Home: index.md
+  - Getting Started:
+      - Installation: getting-started/installation.md
+      - Quick Start: getting-started/quick-start.md
+  - User Guide:
+      - Registering Repositories: user-guide/registering-repos.md
+      - Commands: user-guide/commands.md
+      - Configuration: user-guide/configuration.md
+      - Troubleshooting: user-guide/troubleshooting.md
+  - Concepts:
+      - How It Works: concepts/how-it-works.md
+      - FSMonitor Integration: concepts/fsmonitor.md
+      - Architecture: concepts/architecture.md
+  - Platform Guides:
+      - Linux: platform-guides/linux.md
+      - macOS: platform-guides/macos.md
+      - Windows: platform-guides/windows.md
+      - WSL2: platform-guides/wsl2.md
+  - Reference:
+      - CLI Reference: reference/cli-reference.md
+      - Environment Variables: reference/environment-variables.md
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - toc:
+      permalink: true
+
+plugins:
+  - search
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/yourusername/gity
