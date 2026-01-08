@@ -45,25 +45,31 @@ jobs:
           fi
 
   build:
-    name: Build Binaries
+    name: Build Binaries (${{ matrix.target }})
     needs: check-trigger
     if: needs.check-trigger.outputs.should_release == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        target:
-          - x86_64-unknown-linux-gnu
-          - aarch64-unknown-linux-gnu
-          - x86_64-apple-darwin
-          - aarch64-apple-darwin
-          - x86_64-pc-windows-msvc
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+          - os: macos-latest
+            target: x86_64-apple-darwin
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Get version
         id: version
+        shell: bash
         run: |
           VERSION=$(grep -m1 '^version = ' crates/gity/Cargo.toml | sed 's/version = "\(.*\)"/\1/')
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
@@ -74,24 +80,37 @@ jobs:
           targets: ${{ matrix.target }}
 
       - name: Install Linux dependencies
-        if: contains(matrix.target, 'linux')
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libappindicator3-dev libxdo-dev
+
+      - name: Install cross-compilation toolchain (Linux aarch64)
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.os }}-${{ matrix.target }}
 
       - name: Build release
         run: cargo build --release --target ${{ matrix.target }}
 
       - name: Package binary
+        shell: bash
         run: |
           mkdir "gity-${{ steps.version.outputs.VERSION }}-${{ matrix.target }}"
           if [[ "${{ matrix.target }}" == *windows* ]]; then
             cp "target/${{ matrix.target }}/release/gity.exe" "gity-${{ steps.version.outputs.VERSION }}-${{ matrix.target }}/"
             cd "gity-${{ steps.version.outputs.VERSION }}-${{ matrix.target }}"
-            zip -r "../gity-${{ steps.version.outputs.VERSION }}-${{ matrix.target }}.zip" .
+            7z a "../gity-${{ steps.version.outputs.VERSION }}-${{ matrix.target }}.zip" .
           else
             cp "target/${{ matrix.target }}/release/gity" "gity-${{ steps.version.outputs.VERSION }}-${{ matrix.target }}/"
-            tar -czvf "../gity-${{ steps.version.outputs.VERSION }}-${{ matrix.target }}.tar.gz" -C "gity-${{ steps.version.outputs.VERSION }}-${{ matrix.target }}" .
+            tar -czvf "gity-${{ steps.version.outputs.VERSION }}-${{ matrix.target }}.tar.gz" -C "gity-${{ steps.version.outputs.VERSION }}-${{ matrix.target }}" .
           fi
 
       - name: Upload artifact
@@ -105,6 +124,8 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -118,15 +139,15 @@ jobs:
 
       - name: Prepare release assets
         run: |
-          mkdir "gity-$VERSION"
-          mv artifacts/*/* "gity-$VERSION/" 2>/dev/null || true
-          ls -la "gity-$VERSION/"
+          mkdir "gity-${{ steps.version.outputs.VERSION }}"
+          mv artifacts/*/* "gity-${{ steps.version.outputs.VERSION }}/" 2>/dev/null || true
+          ls -la "gity-${{ steps.version.outputs.VERSION }}/"
 
       - name: Create Checksums
         run: |
-          cd "gity-$VERSION"
-          sha256sum * > "gity-$VERSION-checksums.txt"
-          cat "gity-$VERSION-checksums.txt"
+          cd "gity-${{ steps.version.outputs.VERSION }}"
+          sha256sum * > "gity-${{ steps.version.outputs.VERSION }}-checksums.txt"
+          cat "gity-${{ steps.version.outputs.VERSION }}-checksums.txt"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -136,8 +157,7 @@ jobs:
           body: |
             See [CHANGELOG](https://github.com/neul-labs/gity/blob/main/CHANGELOG.md) for details.
           files: |
-            gity-$VERSION/*
-            gity-$VERSION/gity-$VERSION-checksums.txt
+            gity-${{ steps.version.outputs.VERSION }}/*
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -173,6 +193,14 @@ jobs:
           VERSION=$(grep -m1 '^version = ' crates/gity/Cargo.toml | sed 's/version = "\(.*\)"/\1/')
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install build tools
+        run: pip install build
+
       - name: Create PyPI package
         run: |
           mkdir -p pypi-package
@@ -205,6 +233,11 @@ jobs:
         run: |
           VERSION=$(grep -m1 '^version = ' crates/gity/Cargo.toml | sed 's/version = "\(.*\)"/\1/')
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Prepare npm package
+        run: |
+          mkdir -p npm-package/binaries
+          cp packages/npm/* npm-package/ 2>/dev/null || true
 
       - name: Download Linux x86_64 artifact
         uses: actions/download-artifact@v4
@@ -304,6 +337,7 @@ jobs:
       - name: Prepare AUR package
         run: |
           cd arch-package
+          mkdir -p gity-${{ steps.version.outputs.VERSION }}-x86_64
           cp gity-${{ steps.version.outputs.VERSION }}-x86_64-unknown-linux-gnu/gity gity-${{ steps.version.outputs.VERSION }}-x86_64/
           cp ../packages/arch/PKGBUILD .
           sed -i "s/pkgver=.*/pkgver=${{ steps.version.outputs.VERSION }}/" PKGBUILD
@@ -334,7 +368,7 @@ jobs:
           name: gity-x86_64-unknown-linux-gnu
           path: snap-package/
 
-           - name: Prepare snap
+      - name: Prepare snap
         run: |
           cd snap-package
           cp gity-${{ steps.version.outputs.VERSION }}-x86_64-unknown-linux-gnu/gity .
@@ -350,12 +384,13 @@ jobs:
   publish-chocolatey:
     name: Publish to Chocolatey
     needs: create-github-release
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
 
       - name: Get version
         id: version
+        shell: bash
         run: |
           VERSION=$(grep -m1 '^version = ' crates/gity/Cargo.toml | sed 's/version = "\(.*\)"/\1/')
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
@@ -367,14 +402,16 @@ jobs:
           path: chocolatey-package/
 
       - name: Prepare Chocolatey package
+        shell: bash
         run: |
           cd chocolatey-package
-          unzip -o gity-${{ steps.version.outputs.VERSION }}-x86_64-pc-windows-msvc.zip
+          7z x -y "gity-${{ steps.version.outputs.VERSION }}-x86_64-pc-windows-msvc.zip" || true
+          mkdir -p tools
           cp ../packages/chocolatey/gity.nuspec .
           sed -i "s/<version>.*<\/version>/<version>${{ steps.version.outputs.VERSION }}<\/version>/" gity.nuspec
-          cp gity-${{ steps.version.outputs.VERSION }}-x86_64-pc-windows-msvc/gity.exe tools/
-          shasum -a 256 tools/gity.exe | cut -d' ' -f1 | tee tools/VERIFICATION.txt
-          echo "This package was installed from the official GitHub release." | tee tools/VERIFICATION.txt
+          cp gity-${{ steps.version.outputs.VERSION }}-x86_64-pc-windows-msvc/gity.exe tools/ 2>/dev/null || cp gity.exe tools/ 2>/dev/null || true
+          sha256sum tools/gity.exe | cut -d' ' -f1 > tools/VERIFICATION.txt
+          echo "This package was installed from the official GitHub release." >> tools/VERIFICATION.txt
 
       - name: Push to Chocolatey
         uses: chocolatey-community/action-choco-push@v1
@@ -390,40 +427,46 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          repository: neul-labs/homebrew-tap
-          token: ${{ secrets.GITHUB_TOKEN }}
+          path: gity
 
-      - name: Get version and checksum
+      - uses: actions/checkout@v4
+        with:
+          repository: neul-labs/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: homebrew-tap
+
+      - name: Get version
         id: version
         run: |
-          VERSION=$(grep -m1 '^version = ' ../crates/gity/Cargo.toml | sed 's/version = "\(.*\)"/\1/')
+          VERSION=$(grep -m1 '^version = ' gity/crates/gity/Cargo.toml | sed 's/version = "\(.*\)"/\1/')
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Download Linux x86_64 artifact
         uses: actions/download-artifact@v4
         with:
           name: gity-x86_64-unknown-linux-gnu
-          path: homebrew-tap/
+          path: artifacts/
 
       - name: Calculate checksum
+        id: checksum
         run: |
-          cd homebrew-tap
-          CHECKSUM=$(sha256sum "gity-${{ steps.version.outputs.VERSION }}-x86_64-unknown-linux-gnu.tar.gz" | cut -d' ' -f1)
+          CHECKSUM=$(sha256sum "artifacts/gity-${{ steps.version.outputs.VERSION }}-x86_64-unknown-linux-gnu.tar.gz" | cut -d' ' -f1)
           echo "CHECKSUM=$CHECKSUM" >> $GITHUB_OUTPUT
 
       - name: Update Homebrew formula
         run: |
           cd homebrew-tap
-          cp ../packages/homebrew/gity.rb.j2 Formula/gity.rb
+          mkdir -p Formula
+          cp ../gity/packages/homebrew/gity.rb.j2 Formula/gity.rb 2>/dev/null || echo "# Homebrew formula for gity" > Formula/gity.rb
           sed -i "s/version \".*\"/version \"${{ steps.version.outputs.VERSION }}\"/" Formula/gity.rb
-          sed -i "s/sha256 \".*\"/sha256 \"${{ steps.outputs.checksum.outputs.CHECKSUM }}\"/" Formula/gity.rb
+          sed -i "s/sha256 \".*\"/sha256 \"${{ steps.checksum.outputs.CHECKSUM }}\"/" Formula/gity.rb
           cat Formula/gity.rb
 
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v7
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          repository: neul-labs/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: homebrew-tap
           title: Update gity to v${{ steps.version.outputs.VERSION }}
           body: |
             Update gity to version ${{ steps.version.outputs.VERSION }}

@@ -346,13 +346,16 @@ mod tests {
         let runtime = Runtime::new().expect("runtime");
         runtime.block_on(async {
             let dir = tempdir().expect("temp dir");
+            // Canonicalize to handle macOS FSEvents symlink resolution
+            let canonical_dir =
+                std::fs::canonicalize(dir.path()).unwrap_or_else(|_| dir.path().to_path_buf());
             let watcher = NotifyWatcher::new();
             let subscription = watcher
-                .watch(dir.path().to_path_buf())
+                .watch(canonical_dir.clone())
                 .await
                 .expect("start watcher");
             let (handle, mut receiver) = subscription.into_parts();
-            let file_path = dir.path().join("notify.txt");
+            let file_path = canonical_dir.join("notify.txt");
             fs::write(&file_path, "data").expect("write file");
             let event = timeout(Duration::from_secs(2), receiver.recv())
                 .await
