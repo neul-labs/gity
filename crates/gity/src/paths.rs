@@ -59,12 +59,12 @@ fn resolve_base_dir() -> io::Result<PathBuf> {
     }
     #[cfg(unix)]
     {
-        let home = dirs::home_dir().unwrap_or_else(|| env::temp_dir());
+        let home = dirs::home_dir().unwrap_or_else(env::temp_dir);
         Ok(home.join(".gity"))
     }
     #[cfg(not(unix))]
     {
-        let base = dirs::data_dir().unwrap_or_else(|| env::temp_dir());
+        let base = dirs::data_dir().unwrap_or_else(env::temp_dir);
         Ok(base.join("Gity"))
     }
 }

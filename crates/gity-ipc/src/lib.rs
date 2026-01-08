@@ -3,36 +3,42 @@ use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, path::PathBuf, time::SystemTime};
 use thiserror::Error;
 
+mod bincode_serde;
+mod validated_path;
+
+pub use bincode_serde::{bounded_bincode, validate_message_size, MessageSizeError};
+pub use validated_path::{PathValidationError, ValidatedPath};
+
 /// All commands the CLI/tray can send to the daemon process.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DaemonCommand {
     RegisterRepo {
-        repo_path: PathBuf,
+        repo_path: ValidatedPath,
     },
     UnregisterRepo {
-        repo_path: PathBuf,
+        repo_path: ValidatedPath,
     },
     ListRepos,
     Status {
-        repo_path: PathBuf,
+        repo_path: ValidatedPath,
         known_generation: Option<u64>,
     },
     QueueJob {
-        repo_path: PathBuf,
+        repo_path: ValidatedPath,
         job: JobKind,
     },
     HealthCheck,
     /// Request detailed health diagnostics for a specific repository.
     RepoHealth {
-        repo_path: PathBuf,
+        repo_path: ValidatedPath,
     },
     Metrics,
     FsMonitorSnapshot {
-        repo_path: PathBuf,
+        repo_path: ValidatedPath,
         last_seen_generation: Option<u64>,
     },
     FetchLogs {
-        repo_path: PathBuf,
+        repo_path: ValidatedPath,
         limit: usize,
     },
     /// Request graceful daemon shutdown.
@@ -115,6 +121,12 @@ impl DaemonMetrics {
             global: GlobalMetrics::default(),
             repos: Vec::new(),
         }
+    }
+}
+
+impl Default for DaemonMetrics {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -294,9 +306,11 @@ mod tests {
     #[test]
     fn serde_roundtrip_metrics() {
         let mut jobs = HashMap::new();
-        let mut counts = JobMetrics::default();
-        counts.spawned = 3;
-        counts.completed = 2;
+        let counts = JobMetrics {
+            spawned: 3,
+            completed: 2,
+            failed: 0,
+        };
         jobs.insert(JobKind::Prefetch, counts);
         let response = DaemonResponse::Metrics(DaemonMetrics {
             jobs,

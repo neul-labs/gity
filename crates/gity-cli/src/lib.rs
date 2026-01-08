@@ -2,9 +2,15 @@ use clap::{Parser, Subcommand};
 use gity_ipc::{
     DaemonCommand, DaemonError, DaemonHealth, DaemonMetrics, DaemonResponse, DaemonService,
     FsMonitorSnapshot, JobKind, LogEntry, RepoHealthDetail, RepoStatusDetail, RepoSummary,
+    ValidatedPath,
 };
 use std::{path::PathBuf, time::SystemTime};
 use thiserror::Error;
+
+/// Converts a PathBuf to a ValidatedPath, wrapping any validation errors.
+fn validated_path(path: PathBuf) -> Result<ValidatedPath, CliError> {
+    ValidatedPath::new(path).map_err(|e| CliError::Message(e.to_string()))
+}
 
 /// CLI definition shared by the `gitz` binary and tests.
 #[derive(Debug, Parser)]
@@ -136,68 +142,72 @@ pub enum CliAction {
 }
 
 impl Cli {
-    pub fn into_action(self) -> CliAction {
+    pub fn into_action(self) -> Result<CliAction, CliError> {
         match self.command {
-            Commands::Register { repo_path } => {
-                CliAction::Rpc(DaemonCommand::RegisterRepo { repo_path })
-            }
+            Commands::Register { repo_path } => Ok(CliAction::Rpc(DaemonCommand::RegisterRepo {
+                repo_path: validated_path(repo_path)?,
+            })),
             Commands::Unregister { repo_path } => {
-                CliAction::Rpc(DaemonCommand::UnregisterRepo { repo_path })
+                Ok(CliAction::Rpc(DaemonCommand::UnregisterRepo {
+                    repo_path: validated_path(repo_path)?,
+                }))
             }
-            Commands::List { stats } => CliAction::List { stats },
-            Commands::Events => CliAction::StreamEvents,
+            Commands::List { stats } => Ok(CliAction::List { stats }),
+            Commands::Events => Ok(CliAction::StreamEvents),
             Commands::Changed { repo_path, since } => {
-                CliAction::Rpc(DaemonCommand::FsMonitorSnapshot {
-                    repo_path,
+                Ok(CliAction::Rpc(DaemonCommand::FsMonitorSnapshot {
+                    repo_path: validated_path(repo_path)?,
                     last_seen_generation: since,
-                })
+                }))
             }
             Commands::Logs {
                 repo_path,
                 follow,
                 limit,
-            } => CliAction::Logs {
+            } => Ok(CliAction::Logs {
                 repo_path,
                 follow,
                 limit,
-            },
+            }),
             Commands::FsmonitorHelper {
                 version,
                 token,
                 repo,
-            } => CliAction::FsMonitorHelper {
+            } => Ok(CliAction::FsMonitorHelper {
                 version,
                 token,
                 repo,
-            },
-            Commands::Status { repo_path } => CliAction::Rpc(DaemonCommand::Status {
-                repo_path,
+            }),
+            Commands::Status { repo_path } => Ok(CliAction::Rpc(DaemonCommand::Status {
+                repo_path: validated_path(repo_path)?,
                 known_generation: None,
-            }),
-            Commands::Prefetch { repo_path, now: _ } => CliAction::Rpc(DaemonCommand::QueueJob {
-                repo_path,
-                job: JobKind::Prefetch,
-            }),
-            Commands::Maintain { repo_path } => CliAction::Rpc(DaemonCommand::QueueJob {
-                repo_path,
-                job: JobKind::Maintenance,
-            }),
-            Commands::Health { repo_path } => {
-                CliAction::Rpc(DaemonCommand::RepoHealth { repo_path })
+            })),
+            Commands::Prefetch { repo_path, now: _ } => {
+                Ok(CliAction::Rpc(DaemonCommand::QueueJob {
+                    repo_path: validated_path(repo_path)?,
+                    job: JobKind::Prefetch,
+                }))
             }
-            Commands::Tray => CliAction::RunTray,
+            Commands::Maintain { repo_path } => Ok(CliAction::Rpc(DaemonCommand::QueueJob {
+                repo_path: validated_path(repo_path)?,
+                job: JobKind::Maintenance,
+            })),
+            Commands::Health { repo_path } => Ok(CliAction::Rpc(DaemonCommand::RepoHealth {
+                repo_path: validated_path(repo_path)?,
+            })),
+            Commands::Tray => Ok(CliAction::RunTray),
             Commands::Daemon(cmd) => match cmd {
-                DaemonCommands::Run => CliAction::RunDaemon,
-                DaemonCommands::Start => CliAction::StartDaemon,
-                DaemonCommands::Stop => CliAction::StopDaemon,
-                DaemonCommands::Oneshot { repo_path } => CliAction::OneshotDaemon { repo_path },
-                DaemonCommands::Health => CliAction::Rpc(DaemonCommand::HealthCheck),
-                DaemonCommands::Metrics => CliAction::Rpc(DaemonCommand::Metrics),
+                DaemonCommands::Run => Ok(CliAction::RunDaemon),
+                DaemonCommands::Start => Ok(CliAction::StartDaemon),
+                DaemonCommands::Stop => Ok(CliAction::StopDaemon),
+                DaemonCommands::Oneshot { repo_path } => Ok(CliAction::OneshotDaemon { repo_path }),
+                DaemonCommands::Health => Ok(CliAction::Rpc(DaemonCommand::HealthCheck)),
+                DaemonCommands::Metrics => Ok(CliAction::Rpc(DaemonCommand::Metrics)),
                 DaemonCommands::QueueJob { repo_path, job } => {
-                    CliAction::Rpc(DaemonCommand::QueueJob {
-                        repo_path,
+                    Ok(CliAction::Rpc(DaemonCommand::QueueJob {
+                        repo_path: validated_path(repo_path)?,
                         job: job.into(),
-                    })
+                    }))
                 }
             },
         }
@@ -481,9 +491,9 @@ mod tests {
     #[test]
     fn cli_action_for_register() {
         let cli = Cli::parse_from(["gity", "register", "/tmp/demo"]);
-        match cli.into_action() {
+        match cli.into_action().unwrap() {
             CliAction::Rpc(DaemonCommand::RegisterRepo { repo_path }) => {
-                assert_eq!(repo_path, PathBuf::from("/tmp/demo"));
+                assert_eq!(repo_path.as_path(), std::path::Path::new("/tmp/demo"));
             }
             other => panic!("unexpected action: {other:?}"),
         }
@@ -492,12 +502,12 @@ mod tests {
     #[test]
     fn cli_action_for_status() {
         let cli = Cli::parse_from(["gity", "status", "/tmp/demo"]);
-        match cli.into_action() {
+        match cli.into_action().unwrap() {
             CliAction::Rpc(DaemonCommand::Status {
                 repo_path,
                 known_generation,
             }) => {
-                assert_eq!(repo_path, PathBuf::from("/tmp/demo"));
+                assert_eq!(repo_path.as_path(), std::path::Path::new("/tmp/demo"));
                 assert!(known_generation.is_none());
             }
             other => panic!("unexpected action: {other:?}"),
@@ -507,7 +517,7 @@ mod tests {
     #[test]
     fn cli_action_for_list_with_stats() {
         let cli = Cli::parse_from(["gity", "list", "--stats"]);
-        match cli.into_action() {
+        match cli.into_action().unwrap() {
             CliAction::List { stats } => assert!(stats),
             other => panic!("unexpected action: {other:?}"),
         }
@@ -516,7 +526,7 @@ mod tests {
     #[test]
     fn cli_action_for_daemon_metrics() {
         let cli = Cli::parse_from(["gity", "daemon", "metrics"]);
-        match cli.into_action() {
+        match cli.into_action().unwrap() {
             CliAction::Rpc(DaemonCommand::Metrics) => {}
             other => panic!("unexpected action: {other:?}"),
         }
@@ -525,7 +535,7 @@ mod tests {
     #[test]
     fn cli_action_for_events() {
         let cli = Cli::parse_from(["gity", "events"]);
-        match cli.into_action() {
+        match cli.into_action().unwrap() {
             CliAction::StreamEvents => {}
             other => panic!("unexpected action: {other:?}"),
         }
@@ -534,7 +544,7 @@ mod tests {
     #[test]
     fn cli_action_for_fsmonitor_helper() {
         let cli = Cli::parse_from(["gity", "fsmonitor-helper", "2", "123"]);
-        match cli.into_action() {
+        match cli.into_action().unwrap() {
             CliAction::FsMonitorHelper { version, token, .. } => {
                 assert_eq!(version, 2);
                 assert_eq!(token.as_deref(), Some("123"));
@@ -546,7 +556,7 @@ mod tests {
     #[test]
     fn cli_action_for_logs_follow() {
         let cli = Cli::parse_from(["gity", "logs", "/tmp/demo", "--follow", "--limit", "5"]);
-        match cli.into_action() {
+        match cli.into_action().unwrap() {
             CliAction::Logs {
                 repo_path,
                 follow,

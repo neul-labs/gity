@@ -1,0 +1,19 @@
+Source: gity
+Section: utils
+Priority: optional
+Maintainer: Neul Labs <hello@neul.ai>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.0
+
+Package: gity
+Architecture: amd64 arm64
+Depends: ${misc:Depends}, libc6
+Description: Fast Git helper daemon
+ Gity accelerates Git operations by providing a background daemon that
+ handles fsmonitor, prefetching, and maintenance tasks.
+ .
+ Features:
+  * Git fsmonitor integration for faster status commands
+  * Background prefetch of remote refs
+  * Automated maintenance scheduling
+  * Cross-platform support (Linux, macOS, Windows)

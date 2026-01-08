@@ -1,12 +1,13 @@
 use async_nng::AsyncSocket;
-use gity_ipc::DaemonNotification;
+use bincode::Options as BincodeOptions;
+use gity_ipc::{bounded_bincode, validate_message_size, DaemonNotification};
 use nng::{
+    options::{protocol::pubsub::Subscribe, Options},
     Protocol,
-    options::{Options, protocol::pubsub::Subscribe},
 };
 use tokio::sync::mpsc;
 
-use crate::{DaemonError, ServerError, Shutdown, map_client_error};
+use crate::{map_client_error, DaemonError, ServerError, Shutdown};
 
 /// Publishes daemon notifications over a PUB socket.
 pub struct NotificationServer {
@@ -35,8 +36,9 @@ impl NotificationServer {
                 _ = shutdown.wait() => break,
                 message = self.receiver.recv() => match message {
                     Some(notification) => {
-                        let payload = bincode::serialize(&notification)
-                            .map_err(|err| ServerError::Codec(err.to_string()))?;
+                        let payload = bounded_bincode()
+                            .serialize(&notification)
+                            .map_err(|err| ServerError::Serialization(err.to_string()))?;
                         let mut msg = nng::Message::new();
                         msg.push_back(&payload);
                         async_socket
@@ -85,8 +87,14 @@ impl NotificationSubscriber {
 impl NotificationStream {
     pub async fn next(&mut self) -> Result<DaemonNotification, DaemonError> {
         let message = self.socket.receive(None).await.map_err(map_client_error)?;
-        let notification: DaemonNotification = bincode::deserialize(message.as_slice())
+        let data = message.as_slice();
+
+        validate_message_size(data).map_err(|err| DaemonError::Transport(err.to_string()))?;
+
+        let notification: DaemonNotification = bounded_bincode()
+            .deserialize(data)
             .map_err(|err| DaemonError::Transport(err.to_string()))?;
+
         Ok(notification)
     }
 }

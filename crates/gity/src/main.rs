@@ -9,7 +9,7 @@ use gity_daemon::{
 };
 use gity_ipc::{
     DaemonCommand, DaemonError, DaemonNotification, DaemonResponse, DaemonService, JobEventKind,
-    RepoStatusDetail, WatchEventKind,
+    RepoStatusDetail, ValidatedPath, WatchEventKind,
 };
 use gity_storage::{StorageContext, StorageError};
 use std::{
@@ -27,6 +27,11 @@ use tokio::{
 
 use crate::{daemon_launcher::spawn_daemon, paths::GityPaths, status_cache::StatusCache};
 
+/// Converts a PathBuf to a ValidatedPath.
+fn validated_path(path: PathBuf) -> Result<ValidatedPath, CliError> {
+    ValidatedPath::new(path).map_err(|e| CliError::Message(e.to_string()))
+}
+
 const DEFAULT_ADDR: &str = "tcp://127.0.0.1:7557";
 const DEFAULT_EVENTS_ADDR: &str = "tcp://127.0.0.1:7558";
 
@@ -42,7 +47,7 @@ async fn try_main() -> Result<(), CliError> {
     let cli = Cli::parse();
     let address = default_address();
     let events_address = default_events_address();
-    match cli.into_action() {
+    match cli.into_action()? {
         CliAction::RunDaemon => run_daemon(address, events_address).await,
         action => run_client_action(action, &address, &events_address).await,
     }
@@ -235,11 +240,12 @@ async fn run_fsmonitor_helper(
     let repo_path = resolve_repo_path(repo_override)?;
     let known_generation = token.as_deref().and_then(|value| value.parse::<u64>().ok());
     let client = NngClient::new(address.to_string());
+    let validated = validated_path(repo_path.clone())?;
     let response = request_with_restart(
         &client,
         address,
         DaemonCommand::FsMonitorSnapshot {
-            repo_path: repo_path.clone(),
+            repo_path: validated,
             last_seen_generation: known_generation,
         },
     )
@@ -262,11 +268,12 @@ async fn run_logs_command(
     limit: usize,
 ) -> Result<(), CliError> {
     let client = NngClient::new(address.to_string());
+    let validated = validated_path(repo_path.clone())?;
     let response = request_with_restart(
         &client,
         address,
         DaemonCommand::FetchLogs {
-            repo_path: repo_path.clone(),
+            repo_path: validated,
             limit,
         },
     )
@@ -334,12 +341,9 @@ async fn follow_log_stream(address: &str, repo_path: PathBuf) -> Result<(), CliE
 
 async fn run_start_daemon(address: &str) -> Result<(), CliError> {
     let client = NngClient::new(address.to_string());
-    match client.execute(DaemonCommand::HealthCheck).await {
-        Ok(_) => {
-            println!("daemon already running on {address}");
-            return Ok(());
-        }
-        Err(_) => {}
+    if client.execute(DaemonCommand::HealthCheck).await.is_ok() {
+        println!("daemon already running on {address}");
+        return Ok(());
     }
     spawn_daemon(address)
         .map_err(|err| CliError::Message(format!("failed to start daemon: {err}")))?;
@@ -396,9 +400,10 @@ async fn run_oneshot_daemon(
     let service = runtime.service_handle();
 
     // Register the repo if not already registered
+    let validated = validated_path(repo_path.clone())?;
     let _ = service
         .execute(DaemonCommand::RegisterRepo {
-            repo_path: repo_path.clone(),
+            repo_path: validated,
         })
         .await;
 
@@ -448,12 +453,12 @@ async fn run_oneshot_daemon(
 
 async fn run_status_command(
     client: &NngClient,
-    repo_path: PathBuf,
+    repo_path: ValidatedPath,
     address: &str,
 ) -> Result<(), CliError> {
     let paths = GityPaths::discover().map_err(map_io_error)?;
     let cache = StatusCache::new(paths.data_dir()).map_err(map_io_error)?;
-    let cached = cache.load(&repo_path).map_err(map_io_error)?;
+    let cached = cache.load(repo_path.as_path()).map_err(map_io_error)?;
     let cached_detail = cached.clone();
     let known_generation = cached.as_ref().map(|detail| detail.generation);
     let response = request_with_restart(
@@ -559,13 +564,10 @@ fn resolve_status_decision(
                 }
             } else {
                 StatusDecision {
-                    stdout: format!(
-                        "{}",
-                        format_response(&DaemonResponse::RepoStatusUnchanged {
-                            repo_path,
-                            generation
-                        })
-                    ),
+                    stdout: format_response(&DaemonResponse::RepoStatusUnchanged {
+                        repo_path,
+                        generation,
+                    }),
                     stderr: None,
                     to_cache: None,
                 }

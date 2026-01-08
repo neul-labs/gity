@@ -1,0 +1,19 @@
+class Gity < Formula
+  desc "Fast Git helper daemon"
+  homepage "https://github.com/neul-labs/gity"
+  url "https://github.com/neul-labs/gity/releases/download/vVERSION/gity-VERSION-x86_64-unknown-linux-gnu.tar.gz"
+  version "VERSION"
+  sha256 "sha256"
+
+  license "MIT"
+
+  depends_on "libgcc" if OS.linux?
+
+  def install
+    bin.install "gity"
+  end
+
+  test do
+    assert_match "gity #{version}", shell_output("#{bin}/gity --version").strip
+  end
+end

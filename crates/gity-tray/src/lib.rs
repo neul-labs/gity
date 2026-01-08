@@ -190,6 +190,7 @@ pub fn run_tray_loop(tray: &GityTray) {
 }
 
 #[cfg(any(target_os = "windows", target_os = "macos"))]
+#[allow(deprecated)]
 pub fn run_tray_loop(tray: &GityTray) {
     use winit::event_loop::{ControlFlow, EventLoop};
 

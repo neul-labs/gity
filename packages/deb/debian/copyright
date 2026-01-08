@@ -1,0 +1,7 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: gity
+Source: https://github.com/neul-labs/gity
+
+Files: *
+Copyright: 2024 Neul Labs
+License: MIT

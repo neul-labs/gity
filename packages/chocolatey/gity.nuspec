@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">
+  <metadata>
+    <id>gity</id>
+    <version>0.1.0</version>
+    <title>Gity</title>
+    <authors>Neul Labs</authors>
+    <projectUrl>https://github.com/neul-labs/gity</projectUrl>
+    <iconUrl>https://github.com/neul-labs/gity/raw/main/assets/logo.png</iconUrl>
+    <copyright>2024 Neul Labs</copyright>
+    <licenseUrl>https://github.com/neul-labs/gity/blob/main/LICENSE</licenseUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <description>
+      Gity accelerates Git operations by providing a background daemon that
+      handles fsmonitor, prefetching, and maintenance tasks.
+
+      Features:
+      * Git fsmonitor integration for faster status commands
+      * Background prefetch of remote refs
+      * Automated maintenance scheduling
+      * Cross-platform support (Linux, macOS, Windows)
+    </description>
+    <summary>Fast Git helper daemon</summary>
+    <tags>git fsmonitor cli windows</tags>
+    <releaseNotes>See https://github.com/neul-labs/gity/releases</releaseNotes>
+  </metadata>
+  <files>
+    <file src="tools\**\*" target="tools" />
+  </files>
+</package>

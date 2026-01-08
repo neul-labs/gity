@@ -10,7 +10,9 @@
 use git2::{Repository, Signature};
 use gity_daemon::{NngClient, NngServer, Runtime};
 use gity_git::{working_tree_status, RepoConfigurator};
-use gity_ipc::{DaemonCommand, DaemonResponse, DaemonService, FsMonitorSnapshot, JobKind};
+use gity_ipc::{
+    DaemonCommand, DaemonResponse, DaemonService, FsMonitorSnapshot, JobKind, ValidatedPath,
+};
 use gity_storage::{InMemoryMetadataStore, MetadataStore, SledMetadataStore};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -18,6 +20,11 @@ use std::process::Command;
 use std::time::Duration;
 use tempfile::TempDir;
 use tokio::time::sleep;
+
+/// Helper to convert PathBuf to ValidatedPath (for tests with valid temp paths)
+fn validated_path(path: &Path) -> ValidatedPath {
+    ValidatedPath::new(path.to_path_buf()).expect("valid path for test")
+}
 
 /// Helper to create a Git repository with an initial commit.
 fn create_test_repo(dir: &Path) -> Repository {
@@ -245,7 +252,7 @@ async fn test_daemon_register_and_status_flow() {
     // Register repo
     let response = service
         .execute(DaemonCommand::RegisterRepo {
-            repo_path: dir.path().to_path_buf(),
+            repo_path: validated_path(dir.path()),
         })
         .await
         .expect("register");
@@ -255,7 +262,7 @@ async fn test_daemon_register_and_status_flow() {
     // Get status - should be clean initially
     let response = service
         .execute(DaemonCommand::Status {
-            repo_path: dir.path().to_path_buf(),
+            repo_path: validated_path(dir.path()),
             known_generation: None,
         })
         .await
@@ -281,7 +288,7 @@ async fn test_daemon_status_detects_real_file_changes() {
     // Register repo
     service
         .execute(DaemonCommand::RegisterRepo {
-            repo_path: dir.path().to_path_buf(),
+            repo_path: validated_path(dir.path()),
         })
         .await
         .expect("register");
@@ -289,7 +296,7 @@ async fn test_daemon_status_detects_real_file_changes() {
     // First status (clean)
     let _response = service
         .execute(DaemonCommand::Status {
-            repo_path: dir.path().to_path_buf(),
+            repo_path: validated_path(dir.path()),
             known_generation: None,
         })
         .await
@@ -301,7 +308,7 @@ async fn test_daemon_status_detects_real_file_changes() {
     // Get status again - the working_tree_status should detect the change
     let response = service
         .execute(DaemonCommand::Status {
-            repo_path: dir.path().to_path_buf(),
+            repo_path: validated_path(dir.path()),
             known_generation: None,
         })
         .await
@@ -332,7 +339,7 @@ async fn test_daemon_fsmonitor_snapshot() {
     // Register repo
     service
         .execute(DaemonCommand::RegisterRepo {
-            repo_path: dir.path().to_path_buf(),
+            repo_path: validated_path(dir.path()),
         })
         .await
         .expect("register");
@@ -344,7 +351,7 @@ async fn test_daemon_fsmonitor_snapshot() {
     // Get fsmonitor snapshot
     let response = service
         .execute(DaemonCommand::FsMonitorSnapshot {
-            repo_path: dir.path().to_path_buf(),
+            repo_path: validated_path(dir.path()),
             last_seen_generation: None,
         })
         .await
@@ -372,7 +379,7 @@ async fn test_daemon_job_queueing() {
     // Register repo
     service
         .execute(DaemonCommand::RegisterRepo {
-            repo_path: dir.path().to_path_buf(),
+            repo_path: validated_path(dir.path()),
         })
         .await
         .expect("register");
@@ -380,7 +387,7 @@ async fn test_daemon_job_queueing() {
     // Queue prefetch job
     let response = service
         .execute(DaemonCommand::QueueJob {
-            repo_path: dir.path().to_path_buf(),
+            repo_path: validated_path(dir.path()),
             job: JobKind::Prefetch,
         })
         .await
@@ -414,7 +421,7 @@ async fn test_daemon_repo_health_diagnostics() {
     // Register repo
     service
         .execute(DaemonCommand::RegisterRepo {
-            repo_path: dir.path().to_path_buf(),
+            repo_path: validated_path(dir.path()),
         })
         .await
         .expect("register");
@@ -422,7 +429,7 @@ async fn test_daemon_repo_health_diagnostics() {
     // Get repo health
     let response = service
         .execute(DaemonCommand::RepoHealth {
-            repo_path: dir.path().to_path_buf(),
+            repo_path: validated_path(dir.path()),
         })
         .await
         .expect("repo health");
@@ -451,13 +458,13 @@ async fn test_daemon_list_repos() {
     // Register both repos
     service
         .execute(DaemonCommand::RegisterRepo {
-            repo_path: dir1.path().to_path_buf(),
+            repo_path: validated_path(dir1.path()),
         })
         .await
         .expect("register 1");
     service
         .execute(DaemonCommand::RegisterRepo {
-            repo_path: dir2.path().to_path_buf(),
+            repo_path: validated_path(dir2.path()),
         })
         .await
         .expect("register 2");
@@ -488,14 +495,14 @@ async fn test_daemon_unregister_repo() {
     // Register then unregister
     service
         .execute(DaemonCommand::RegisterRepo {
-            repo_path: dir.path().to_path_buf(),
+            repo_path: validated_path(dir.path()),
         })
         .await
         .expect("register");
 
     let response = service
         .execute(DaemonCommand::UnregisterRepo {
-            repo_path: dir.path().to_path_buf(),
+            repo_path: validated_path(dir.path()),
         })
         .await
         .expect("unregister");
@@ -549,7 +556,7 @@ async fn test_nng_client_server_with_real_repo() {
 
     let response = client
         .execute(DaemonCommand::RegisterRepo {
-            repo_path: dir.path().to_path_buf(),
+            repo_path: validated_path(dir.path()),
         })
         .await
         .expect("register via client");
@@ -559,7 +566,7 @@ async fn test_nng_client_server_with_real_repo() {
     // Test status query
     let response = client
         .execute(DaemonCommand::Status {
-            repo_path: dir.path().to_path_buf(),
+            repo_path: validated_path(dir.path()),
             known_generation: None,
         })
         .await
@@ -587,7 +594,7 @@ async fn test_generation_increments_on_changes() {
 
     service
         .execute(DaemonCommand::RegisterRepo {
-            repo_path: dir.path().to_path_buf(),
+            repo_path: validated_path(dir.path()),
         })
         .await
         .expect("register");
@@ -595,7 +602,7 @@ async fn test_generation_increments_on_changes() {
     // First status
     let response1 = service
         .execute(DaemonCommand::Status {
-            repo_path: dir.path().to_path_buf(),
+            repo_path: validated_path(dir.path()),
             known_generation: None,
         })
         .await
@@ -612,7 +619,7 @@ async fn test_generation_increments_on_changes() {
 
     let response2 = service
         .execute(DaemonCommand::Status {
-            repo_path: dir.path().to_path_buf(),
+            repo_path: validated_path(dir.path()),
             known_generation: None, // Don't pass known generation to force full check
         })
         .await
@@ -650,7 +657,7 @@ async fn test_full_workflow_register_modify_status() {
     // Step 1: Register repo
     let response = service
         .execute(DaemonCommand::RegisterRepo {
-            repo_path: dir.path().to_path_buf(),
+            repo_path: validated_path(dir.path()),
         })
         .await
         .expect("register");
@@ -664,7 +671,7 @@ async fn test_full_workflow_register_modify_status() {
     // Step 3: Query status
     let response = service
         .execute(DaemonCommand::Status {
-            repo_path: dir.path().to_path_buf(),
+            repo_path: validated_path(dir.path()),
             known_generation: None,
         })
         .await
@@ -674,7 +681,7 @@ async fn test_full_workflow_register_modify_status() {
     match response {
         DaemonResponse::RepoStatus(detail) => {
             assert_eq!(detail.repo_path, dir.path());
-            assert!(detail.dirty_paths.len() >= 1, "Should have dirty paths");
+            assert!(!detail.dirty_paths.is_empty(), "Should have dirty paths");
 
             // Check specific files are detected
             let has_readme = detail.dirty_paths.iter().any(|p| p.ends_with("README.md"));
@@ -900,7 +907,7 @@ async fn test_fsmonitor_filters_git_internal_paths() {
     // Query fsmonitor snapshot
     let response = service
         .execute(DaemonCommand::FsMonitorSnapshot {
-            repo_path: dir.path().to_path_buf(),
+            repo_path: validated_path(dir.path()),
             last_seen_generation: None,
         })
         .await

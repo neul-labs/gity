@@ -1,0 +1,20 @@
+# Maintainer: Neul Labs <hello@neul.ai>
+
+pkgname=gity
+pkgver=VERSION
+pkgrel=1
+pkgdesc="Fast Git helper daemon"
+arch=('x86_64' 'aarch64')
+url="https://github.com/neul-labs/gity"
+license=('MIT')
+depends=('libc')
+source_x86_64=("https://github.com/neul-labs/gity/releases/download/v${pkgver}/gity-${pkgver}-x86_64-unknown-linux-gnu.tar.gz")
+source_aarch64=("https://github.com/neul-labs/gity/releases/download/v${pkgver}/gity-${pkgver}-aarch64-unknown-linux-gnu.tar.gz")
+sha256sums_x86_64=('SKIP')
+sha256sums_aarch64=('SKIP')
+
+package() {
+  mkdir -p "${pkgdir}/usr/bin"
+  cp "${srcdir}/gity-${pkgver}-${CARCH}-unknown-linux-gnu/gity "${pkgdir}/usr/bin/"
+  chmod 755 "${pkgdir}/usr/bin/gity"
+}

@@ -1,0 +1,38 @@
+{
+  "name": "gity-cli",
+  "version": "0.1.0",
+  "description": "Fast Git helper daemon - Make large Git repositories feel instant",
+  "main": "lib/cli.js",
+  "bin": {
+    "gity": "./lib/cli.js"
+  },
+  "scripts": {
+    "install": "node lib/install.js"
+  },
+  "keywords": [
+    "git",
+    "fsmonitor",
+    "performance",
+    "daemon",
+    "cli"
+  ],
+  "author": "Neul Labs <hello@neul.ai>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/neul-labs/gity.git"
+  },
+  "homepage": "https://github.com/neul-labs/gity",
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "os": [
+    "linux",
+    "darwin",
+    "win32"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ]
+}

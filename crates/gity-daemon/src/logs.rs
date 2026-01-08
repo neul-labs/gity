@@ -1,4 +1,5 @@
-use gity_ipc::LogEntry;
+use bincode::Options as BincodeOptions;
+use gity_ipc::{bounded_bincode, LogEntry};
 use serde::{Deserialize, Serialize};
 use sled::Tree;
 use std::{
@@ -7,6 +8,7 @@ use std::{
     sync::{Arc, Mutex},
     time::SystemTime,
 };
+use tracing::warn;
 
 #[derive(Clone)]
 pub struct LogBook {
@@ -45,9 +47,7 @@ impl LogBook {
         };
         {
             let mut guard = self.inner.lock().expect("log book poisoned");
-            let buf = guard
-                .entry(repo_path.to_path_buf())
-                .or_insert_with(VecDeque::new);
+            let buf = guard.entry(repo_path.to_path_buf()).or_default();
             buf.push_back(entry.clone());
             if buf.len() > self.capacity {
                 buf.pop_front();
@@ -55,9 +55,11 @@ impl LogBook {
         }
         if let Some(tree) = &self.tree {
             let record = PersistedLogEntry::from_entry(repo_path, &entry);
-            if let Ok(bytes) = bincode::serialize(&record) {
+            if let Ok(bytes) = bounded_bincode().serialize(&record) {
                 let key = log_key(repo_path, entry.timestamp);
-                let _ = tree.insert(key, bytes);
+                if let Err(err) = tree.insert(key, bytes) {
+                    warn!("failed to persist log entry: {}", err);
+                }
             }
         }
         LogEntry {
@@ -113,29 +115,38 @@ fn load_from_tree(tree: &Tree, repo_path: &Path, limit: usize) -> Vec<LogEntry> 
         p.push(0);
         p
     };
-    let mut entries = Vec::new();
-    for result in tree
+    // Enforce reasonable limits to prevent memory exhaustion
+    let max_entries = limit.min(10_000);
+    let entries: Vec<LogEntry> = tree
         .range(prefix.clone()..)
         .filter(|res| match res {
             Ok((key, _)) => key.starts_with(&prefix),
             Err(_) => false,
         })
         .rev()
-        .take(limit)
-    {
-        if let Ok((_, value)) = result {
-            if let Ok(record) = bincode::deserialize::<PersistedLogEntry>(&value) {
-                entries.push(LogEntry {
-                    repo_path: record.repo_path.clone(),
-                    message: record.message,
-                    timestamp: record.timestamp,
-                });
+        .take(max_entries)
+        .filter_map(|result| {
+            let (_, value) = result.ok()?;
+            // Skip oversized entries
+            if value.len() > MAX_LOG_ENTRY_SIZE {
+                warn!("skipping oversized log entry: {} bytes", value.len());
+                return None;
             }
-        }
-    }
-    entries.reverse();
+            let record = bounded_bincode()
+                .deserialize::<PersistedLogEntry>(&value)
+                .ok()?;
+            Some(LogEntry {
+                repo_path: record.repo_path.clone(),
+                message: record.message,
+                timestamp: record.timestamp,
+            })
+        })
+        .collect();
     entries
 }
+
+/// Maximum allowed log entry size (1MB)
+const MAX_LOG_ENTRY_SIZE: usize = 1_048_576;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct PersistedLogEntry {

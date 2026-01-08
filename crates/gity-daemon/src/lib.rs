@@ -2,19 +2,23 @@ mod events;
 mod logs;
 mod metrics;
 
+mod logging;
+
 use crate::{
     logs::LogBook,
-    metrics::{MetricsRegistry, collect_resource_snapshot},
+    metrics::{collect_resource_snapshot, MetricsRegistry},
 };
 use async_nng::AsyncSocket;
 use async_trait::async_trait;
+use bincode::Options as BincodeOptions;
 pub use events::{NotificationServer, NotificationStream, NotificationSubscriber};
-use gity_git::{RepoConfigurator, working_tree_status};
+use gity_git::{working_tree_status, RepoConfigurator};
 use gity_ipc::{
-    Ack, DaemonCommand, DaemonError, DaemonHealth, DaemonNotification, DaemonResponse,
-    DaemonService, FsMonitorSnapshot, GlobalMetrics, JobEventKind, JobEventNotification, JobKind,
-    LogEntry, RepoGeneration, RepoHealthDetail, RepoMetrics, RepoStatusDetail, RepoSummary,
-    WatchEventKind as IpcWatchEventKind, WatchEventNotification,
+    bounded_bincode, validate_message_size, Ack, DaemonCommand, DaemonError, DaemonHealth,
+    DaemonNotification, DaemonResponse, DaemonService, FsMonitorSnapshot, GlobalMetrics,
+    JobEventKind, JobEventNotification, JobKind, LogEntry, RepoGeneration, RepoHealthDetail,
+    RepoMetrics, RepoStatusDetail, RepoSummary, WatchEventKind as IpcWatchEventKind,
+    WatchEventNotification,
 };
 use gity_storage::{MetadataStore, RepoMetadata};
 use gity_watch::{
@@ -25,8 +29,8 @@ use std::{
     collections::{HashMap, HashSet, VecDeque},
     path::{Path, PathBuf},
     sync::{
-        Arc, Mutex,
         atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
     },
     time::{Duration, Instant, SystemTime},
 };
@@ -35,7 +39,7 @@ use tokio::sync::mpsc::error::TryRecvError;
 use tokio::{
     process::Command,
     select,
-    sync::{Notify, mpsc},
+    sync::{mpsc, Notify},
     task::JoinHandle,
     time::sleep,
 };
@@ -120,7 +124,7 @@ impl<S: MetadataStore> Daemon<S> {
     fn handle(&mut self, command: DaemonCommand) -> DaemonResponse {
         match command {
             DaemonCommand::RegisterRepo { repo_path } => {
-                match self.store.register_repo(repo_path.clone()) {
+                match self.store.register_repo(repo_path.as_path().to_path_buf()) {
                     Ok(_) => match configure_repo(&repo_path, self.fsmonitor_helper.as_deref()) {
                         Ok(_) => DaemonResponse::Ack(Ack::new("registered")),
                         Err(err) => err,
@@ -165,7 +169,7 @@ impl<S: MetadataStore> Daemon<S> {
                         .unwrap_or(false)
                 {
                     return DaemonResponse::RepoStatusUnchanged {
-                        repo_path,
+                        repo_path: repo_path.as_path().to_path_buf(),
                         generation: current_generation,
                     };
                 }
@@ -182,13 +186,9 @@ impl<S: MetadataStore> Daemon<S> {
                 }
             }
             DaemonCommand::QueueJob { repo_path, job } => {
-                self.scheduler.enqueue(repo_path.clone(), job.clone());
-                send_job_notification(
-                    &self.notifications,
-                    &repo_path,
-                    job.clone(),
-                    JobEventKind::Queued,
-                );
+                self.scheduler
+                    .enqueue(repo_path.as_path().to_path_buf(), job);
+                send_job_notification(&self.notifications, &repo_path, job, JobEventKind::Queued);
                 match self.store.increment_jobs(&repo_path, 1) {
                     Ok(_) => DaemonResponse::Ack(Ack::new(format!("queued {:?}", job))),
                     Err(err) => err_response(err),
@@ -251,7 +251,7 @@ impl<S: MetadataStore> Daemon<S> {
                         .unwrap_or(false)
                 {
                     return DaemonResponse::FsMonitorSnapshot(FsMonitorSnapshot {
-                        repo_path,
+                        repo_path: repo_path.as_path().to_path_buf(),
                         dirty_paths: Vec::new(),
                         generation: current_generation,
                     });
@@ -263,7 +263,7 @@ impl<S: MetadataStore> Daemon<S> {
                 // Filter out .git internal paths - fsmonitor only wants working tree files
                 let working_tree_paths = filter_working_tree_paths(dirty_paths);
                 DaemonResponse::FsMonitorSnapshot(FsMonitorSnapshot {
-                    repo_path,
+                    repo_path: repo_path.as_path().to_path_buf(),
                     dirty_paths: working_tree_paths,
                     generation,
                 })
@@ -288,17 +288,23 @@ impl<S: MetadataStore> Daemon<S> {
             }
             Err(err) => return err_response(err),
         };
-        let dirty_path_count = self.store.dirty_path_count(repo_path).unwrap_or(0);
+        let dirty_path_count = match self.store.dirty_path_count(repo_path) {
+            Ok(count) => count,
+            Err(err) => {
+                warn!("failed to get dirty path count: {}", err);
+                0
+            }
+        };
         DaemonResponse::RepoHealth(RepoHealthDetail {
             repo_path: repo_path.to_path_buf(),
             generation: meta.generation,
             pending_jobs: meta.pending_jobs,
-            watcher_active: true, // Will be updated by runtime
+            watcher_active: false, // Placeholder - Runtime will override with actual state
             last_event: meta.last_event,
             dirty_path_count,
-            sled_ok: true, // Sled integrity check placeholder
+            sled_ok: true, // Placeholder - checked via store operations
             needs_reconciliation: meta.needs_reconciliation.unwrap_or(false),
-            throttling_active: false, // Resource monitor integration
+            throttling_active: false, // Placeholder - Runtime will override
             next_scheduled_job: None,
         })
     }
@@ -309,8 +315,20 @@ impl<S: MetadataStore> Daemon<S> {
 
     fn mark_job_completed(&mut self, job: &QueuedJob) {
         let now = SystemTime::now();
-        let _ = self.store.increment_jobs(&job.repo_path, -1);
-        let _ = self.store.record_event(&job.repo_path, now);
+        if let Err(err) = self.store.increment_jobs(&job.repo_path, -1) {
+            warn!(
+                "failed to decrement job counter for {}: {}",
+                job.repo_path.display(),
+                err
+            );
+        }
+        if let Err(err) = self.store.record_event(&job.repo_path, now) {
+            warn!(
+                "failed to record job completion event for {}: {}",
+                job.repo_path.display(),
+                err
+            );
+        }
     }
 
     fn emit_status_notification(&self, detail: &RepoStatusDetail) {
@@ -349,13 +367,31 @@ fn clear_repo_config(path: &Path) -> Result<(), DaemonResponse> {
 impl<S: MetadataStore> Daemon<S> {
     fn handle_watch_event(&mut self, repo_path: &Path, event: &WatchEvent) {
         let now = SystemTime::now();
-        let _ = self.store.record_event(repo_path, now);
+        if let Err(err) = self.store.record_event(repo_path, now) {
+            warn!(
+                "failed to record watch event for {}: {}",
+                repo_path.display(),
+                err
+            );
+        }
         if should_track(&event.kind) {
             if let Some(relative) = relative_path(repo_path, &event.path) {
-                let _ = self.store.mark_dirty_path(repo_path, relative);
+                if let Err(err) = self.store.mark_dirty_path(repo_path, relative) {
+                    warn!(
+                        "failed to mark dirty path for {}: {}",
+                        repo_path.display(),
+                        err
+                    );
+                }
             }
         } else if let WatchEventKind::Deleted = event.kind {
-            let _ = self.store.mark_dirty_path(repo_path, PathBuf::from("."));
+            if let Err(err) = self.store.mark_dirty_path(repo_path, PathBuf::from(".")) {
+                warn!(
+                    "failed to mark repo dirty after deletion in {}: {}",
+                    repo_path.display(),
+                    err
+                );
+            }
         }
     }
 
@@ -430,17 +466,21 @@ fn send_job_notification(
     kind: JobEventKind,
 ) {
     if let Some(tx) = notifications {
-        let _ = tx.send(DaemonNotification::JobEvent(JobEventNotification {
+        if let Err(err) = tx.send(DaemonNotification::JobEvent(JobEventNotification {
             repo_path: repo_path.to_path_buf(),
             job,
             kind,
-        }));
+        })) {
+            warn!("failed to send job notification: {}", err);
+        }
     }
 }
 
 fn send_log_notification(notifications: &Option<NotificationSender>, entry: &LogEntry) {
     if let Some(tx) = notifications {
-        let _ = tx.send(DaemonNotification::Log(entry.clone()));
+        if let Err(err) = tx.send(DaemonNotification::Log(entry.clone())) {
+            warn!("failed to send log notification: {}", err);
+        }
     }
 }
 
@@ -458,7 +498,15 @@ impl Shutdown {
             notify: Arc::new(Notify::new()),
         }
     }
+}
 
+impl Default for Shutdown {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Shutdown {
     pub fn shutdown(&self) {
         if !self.flag.swap(true, Ordering::SeqCst) {
             self.notify.notify_waiters();
@@ -539,6 +587,10 @@ pub struct Runtime<S: MetadataStore> {
     logs: LogBook,
     idle_config: IdleScheduleConfig,
     idle_states: Arc<Mutex<HashMap<PathBuf, RepoIdleState>>>,
+    /// Tracks last watcher activity time per repository for health checks
+    last_watcher_activity: Arc<Mutex<HashMap<PathBuf, Instant>>>,
+    /// Tracks whether resource throttling is currently active
+    throttling_active: Arc<AtomicBool>,
 }
 
 impl<S: MetadataStore> Runtime<S> {
@@ -603,6 +655,8 @@ impl<S: MetadataStore> Runtime<S> {
             logs,
             idle_config: IdleScheduleConfig::default(),
             idle_states: Arc::new(Mutex::new(HashMap::new())),
+            last_watcher_activity: Arc::new(Mutex::new(HashMap::new())),
+            throttling_active: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -678,12 +732,24 @@ impl<S: MetadataStore> Runtime<S> {
 
         // Mark the repo as needing reconciliation
         if let Ok(guard) = self.daemon.lock() {
-            let _ = guard.store.set_needs_reconciliation(repo_path, true);
+            if let Err(err) = guard.store.set_needs_reconciliation(repo_path, true) {
+                error!(
+                    "failed to mark reconciliation needed for {}: {}",
+                    repo_path.display(),
+                    err
+                );
+            }
         }
 
         // Mark the entire repo as dirty to force a full status check
         if let Ok(guard) = self.daemon.lock() {
-            let _ = guard.store.mark_dirty_path(repo_path, PathBuf::from("."));
+            if let Err(err) = guard.store.mark_dirty_path(repo_path, PathBuf::from(".")) {
+                error!(
+                    "failed to mark repo dirty for reconciliation in {}: {}",
+                    repo_path.display(),
+                    err
+                );
+            }
         }
 
         info!("scheduled reconciliation scan for {}", repo_path.display());
@@ -944,6 +1010,8 @@ impl<S: MetadataStore> Runtime<S> {
         loop {
             match receiver.try_recv() {
                 Ok(envelope) => {
+                    // Record watcher activity for this repo
+                    self.record_watcher_activity(&envelope.repo_path);
                     // Reset idle timer for this repo
                     self.touch_repo_activity(&envelope.repo_path);
                     if let Ok(mut guard) = self.daemon.lock() {
@@ -971,6 +1039,13 @@ impl<S: MetadataStore> Runtime<S> {
         }
     }
 
+    /// Records watcher activity timestamp for health check verification
+    fn record_watcher_activity(&self, repo_path: &Path) {
+        if let Ok(mut activity) = self.last_watcher_activity.lock() {
+            activity.insert(repo_path.to_path_buf(), Instant::now());
+        }
+    }
+
     fn emit_watch_notification(&self, repo_path: &Path, event: &WatchEvent) {
         if let Some(tx) = &self.notifications {
             let path = relative_path(repo_path, &event.path).unwrap_or_else(|| event.path.clone());
@@ -979,13 +1054,54 @@ impl<S: MetadataStore> Runtime<S> {
                 path,
                 kind: map_watch_kind(&event.kind),
             });
-            let _ = tx.send(notification);
+            if let Err(err) = tx.send(notification) {
+                warn!("failed to send watch notification: {}", err);
+            }
         }
     }
 
     fn record_log(&self, repo_path: &Path, message: impl Into<String>) {
         let entry = self.logs.record(repo_path, message);
         send_log_notification(&self.notifications, &entry);
+    }
+
+    /// Computes repository health using both daemon state and runtime state.
+    pub fn compute_repo_health(&self, repo_path: &Path) -> DaemonResponse {
+        if let Ok(guard) = self.daemon.lock() {
+            let response = guard.compute_repo_health(repo_path);
+            match response {
+                DaemonResponse::RepoHealth(mut detail) => {
+                    // Check watcher activity
+                    detail.watcher_active = self.is_watcher_active(repo_path);
+                    // Check throttling state
+                    detail.throttling_active = self.throttling_active.load(Ordering::SeqCst);
+                    // Sled is OK if we could acquire the lock
+                    detail.sled_ok = true;
+                    DaemonResponse::RepoHealth(detail)
+                }
+                _ => response,
+            }
+        } else {
+            DaemonResponse::Error("failed to acquire daemon lock".to_string())
+        }
+    }
+
+    /// Checks if the watcher is active for a repository (saw activity in last 60 seconds)
+    fn is_watcher_active(&self, repo_path: &Path) -> bool {
+        if let Ok(activity) = self.last_watcher_activity.lock() {
+            if let Some(last_activity) = activity.get(repo_path) {
+                last_activity.elapsed().as_secs() < 60
+            } else {
+                // No activity recorded - check if repo was just registered
+                if let Ok(guard) = self.daemon.lock() {
+                    guard.store.get_repo(repo_path).ok().flatten().is_some()
+                } else {
+                    false
+                }
+            }
+        } else {
+            true // Default to true if lock fails
+        }
     }
 }
 
@@ -1082,7 +1198,7 @@ impl<S: MetadataStore> DaemonService for InProcessService<S> {
         let mut guard = self
             .inner
             .lock()
-            .map_err(|_| DaemonError::Transport("failed to acquire daemon lock".to_string()))?;
+            .map_err(|e| DaemonError::Transport(format!("failed to acquire daemon lock: {}", e)))?;
         Ok(guard.handle(command))
     }
 }
@@ -1130,14 +1246,27 @@ impl<S: MetadataStore> NngServer<S> {
     }
 
     fn process_message(&self, message: nng::Message) -> Result<nng::Message, ServerError> {
-        let command: DaemonCommand = bincode::deserialize(message.as_slice())
-            .map_err(|err| ServerError::Codec(err.to_string()))?;
+        let data = message.as_slice();
+
+        // Validate message size before deserialization
+        validate_message_size(data).map_err(|err| ServerError::Deserialization(err.to_string()))?;
+
+        let command: DaemonCommand = bounded_bincode()
+            .deserialize(data)
+            .map_err(|err| ServerError::Deserialization(err.to_string()))?;
+
         let response = {
-            let mut guard = self.daemon.lock().map_err(|_| ServerError::Poisoned)?;
+            let mut guard = self
+                .daemon
+                .lock()
+                .map_err(|e| ServerError::Poisoned(e.to_string()))?;
             guard.handle(command)
         };
-        let payload =
-            bincode::serialize(&response).map_err(|err| ServerError::Codec(err.to_string()))?;
+
+        let payload = bounded_bincode()
+            .serialize(&response)
+            .map_err(|err| ServerError::Serialization(err.to_string()))?;
+
         let mut reply = nng::Message::new();
         reply.push_back(&payload);
         Ok(reply)
@@ -1161,8 +1290,10 @@ impl NngClient {
         socket.dial(&self.address).map_err(map_client_error)?;
         let mut async_socket = AsyncSocket::try_from(socket).map_err(map_client_error)?;
 
-        let payload =
-            bincode::serialize(&command).map_err(|err| DaemonError::Transport(err.to_string()))?;
+        let payload = bounded_bincode()
+            .serialize(&command)
+            .map_err(|err| DaemonError::Transport(err.to_string()))?;
+
         let mut message = nng::Message::new();
         message.push_back(&payload);
         async_socket
@@ -1171,8 +1302,14 @@ impl NngClient {
             .map_err(|(_, err)| map_client_error(err))?;
 
         let reply = async_socket.receive(None).await.map_err(map_client_error)?;
-        let response: DaemonResponse = bincode::deserialize(reply.as_slice())
+        let data = reply.as_slice();
+
+        validate_message_size(data).map_err(|err| DaemonError::Transport(err.to_string()))?;
+
+        let response: DaemonResponse = bounded_bincode()
+            .deserialize(data)
             .map_err(|err| DaemonError::Transport(err.to_string()))?;
+
         Ok(response)
     }
 }
@@ -1192,20 +1329,27 @@ fn map_client_error(err: nng::Error) -> DaemonError {
 pub enum ServerError {
     #[error("nng error: {0}")]
     Socket(#[from] nng::Error),
-    #[error("codec error: {0}")]
-    Codec(String),
-    #[error("daemon lock poisoned")]
-    Poisoned,
+    #[error("deserialization error: {0}")]
+    Deserialization(String),
+    #[error("serialization error: {0}")]
+    Serialization(String),
+    #[error("daemon lock poisoned: {0}")]
+    Poisoned(String),
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use git2::Repository;
+    use gity_ipc::ValidatedPath;
     use gity_storage::InMemoryMetadataStore;
     use gity_watch::{ManualWatchHandle, ManualWatcher, WatchEvent, WatchEventKind};
     use std::time::Duration;
     use tempfile::tempdir;
+
+    fn validated_path(path: PathBuf) -> ValidatedPath {
+        ValidatedPath::new(path).unwrap()
+    }
 
     #[test]
     fn scheduler_drops_completed_jobs() {
@@ -1214,12 +1358,12 @@ mod tests {
         let (_repo_dir, repo) = init_temp_repo();
         assert!(matches!(
             daemon.handle(DaemonCommand::RegisterRepo {
-                repo_path: repo.clone()
+                repo_path: validated_path(repo.clone())
             }),
             DaemonResponse::Ack(_)
         ));
         daemon.handle(DaemonCommand::QueueJob {
-            repo_path: repo.clone(),
+            repo_path: validated_path(repo.clone()),
             job: JobKind::Prefetch,
         });
         if let Some(job) = daemon.next_job() {
@@ -1261,7 +1405,7 @@ mod tests {
         let mut daemon = Daemon::new(store);
         let (_repo_dir, repo) = init_temp_repo();
         match daemon.handle(DaemonCommand::RegisterRepo {
-            repo_path: repo.clone(),
+            repo_path: validated_path(repo.clone()),
         }) {
             DaemonResponse::Ack(_) => {}
             other => panic!("unexpected response: {other:?}"),
@@ -1271,7 +1415,7 @@ mod tests {
             &WatchEvent::new(repo.join("file.txt"), WatchEventKind::Modified),
         );
         let response = daemon.handle(DaemonCommand::FsMonitorSnapshot {
-            repo_path: repo.clone(),
+            repo_path: validated_path(repo.clone()),
             last_seen_generation: None,
         });
         match response {
@@ -1295,13 +1439,13 @@ mod tests {
         let (_repo_dir, repo) = init_temp_repo();
         service
             .execute(DaemonCommand::RegisterRepo {
-                repo_path: repo.clone(),
+                repo_path: validated_path(repo.clone()),
             })
             .await
             .unwrap();
         service
             .execute(DaemonCommand::QueueJob {
-                repo_path: repo.clone(),
+                repo_path: validated_path(repo.clone()),
                 job: JobKind::Maintenance,
             })
             .await
@@ -1335,7 +1479,7 @@ mod tests {
         let (_repo_dir, repo_path) = init_temp_repo();
         client
             .execute(DaemonCommand::RegisterRepo {
-                repo_path: repo_path.clone(),
+                repo_path: validated_path(repo_path.clone()),
             })
             .await
             .unwrap();
@@ -1367,7 +1511,7 @@ mod tests {
         std::fs::write(repo_path.join("file.txt"), "data").expect("write file");
         service
             .execute(DaemonCommand::RegisterRepo {
-                repo_path: repo_path.clone(),
+                repo_path: validated_path(repo_path.clone()),
             })
             .await
             .unwrap();
@@ -1401,7 +1545,7 @@ mod tests {
 
         let status_response = service
             .execute(DaemonCommand::Status {
-                repo_path: repo_path.clone(),
+                repo_path: validated_path(repo_path.clone()),
                 known_generation: None,
             })
             .await

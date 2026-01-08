@@ -3,8 +3,10 @@ name: CI
 on:
   pull_request:
     branches: [main]
-  release:
-    types: [created]
+  push:
+    branches: [main]
+    tags:
+      - 'v*'
 
 env:
   CARGO_TERM_COLOR: always
@@ -59,8 +61,60 @@ jobs:
       - name: Run tests
         run: cargo test --all
 
+  version-check:
+    name: Version Check
+    needs: [lint, test]
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.VERSION }}
+      is_release: ${{ steps.check.outputs.IS_RELEASE }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get current version
+        id: version
+        run: |
+          VERSION=$(grep -m1 '^version = ' crates/gity/Cargo.toml | sed 's/version = "\(.*\)"/\1/')
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "Current version: $VERSION"
+
+      - name: Get latest tag
+        id: latest-tag
+        run: |
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo '')
+          if [ -z "$LATEST_TAG" ]; then
+            LATEST_TAG="v0.0.0"
+          fi
+          echo "LATEST_TAG=${LATEST_TAG#v}" >> $GITHUB_OUTPUT
+          echo "Latest tag: $LATEST_TAG"
+
+      - name: Check if version changed
+        id: check
+        run: |
+          CURRENT=${{ steps.version.outputs.VERSION }}
+          LATEST=${{ steps.latest-tag.outputs.LATEST_TAG }}
+          if [ "$CURRENT" != "$LATEST" ]; then
+            echo "IS_RELEASE=true" >> $GITHUB_OUTPUT
+            echo "Version changed: $LATEST -> $CURRENT"
+          else
+            echo "IS_RELEASE=false" >> $GITHUB_OUTPUT
+            echo "Version unchanged: $CURRENT"
+          fi
+
+      - name: Create version tag
+        if: steps.check.outputs.IS_RELEASE == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "v${{ steps.version.outputs.VERSION }}"
+          git push origin "v${{ steps.version.outputs.VERSION }}"
+
   build-release:
     name: Build Release (${{ matrix.target }})
+    needs: [version-check]
+    if: ${{ needs.version-check.outputs.is_release == 'true' }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -68,16 +122,19 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            artifact: gitz
+            artifact: gity
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            artifact: gity
           - os: macos-latest
             target: x86_64-apple-darwin
-            artifact: gitz
+            artifact: gity
           - os: macos-latest
             target: aarch64-apple-darwin
-            artifact: gitz
+            artifact: gity
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            artifact: gitz.exe
+            artifact: gity.exe
 
     steps:
       - uses: actions/checkout@v4
@@ -96,40 +153,17 @@ jobs:
       - name: Build release
         run: cargo build --release --target ${{ matrix.target }}
 
+      - name: Get version
+        id: version
+        run: echo "VERSION=$(grep -m1 '^version = ' crates/gity/Cargo.toml | sed 's/version = "\(.*\)"/\1/')" >> $GITHUB_OUTPUT
+
+      - name: Create artifact with version
+        run: |
+          mkdir "gity-$VERSION-${{ matrix.target }}"
+          cp "target/${{ matrix.target }}/release/${{ matrix.artifact }}" "gity-$VERSION-${{ matrix.target }}/"
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: gitz-${{ matrix.target }}
-          path: target/${{ matrix.target }}/release/${{ matrix.artifact }}
-
-  release:
-    name: Create Release
-    needs: [lint, test, build-release]
-    runs-on: ubuntu-latest
-    if: github.event_name == 'release'
-
-    steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-
-      - name: Create release archives
-        run: |
-          cd artifacts
-          for dir in */; do
-            name="${dir%/}"
-            if [[ "$name" == *"windows"* ]]; then
-              zip -j "../${name}.zip" "$dir"*
-            else
-              tar -czvf "../${name}.tar.gz" -C "$dir" .
-            fi
-          done
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            *.tar.gz
-            *.zip
-          generate_release_notes: true
+          name: gity-${{ matrix.target }}
+          path: gity-${{ steps.version.outputs.VERSION }}-${{ matrix.target }}/
