@@ -1,5 +1,31 @@
+# Rust build artifacts
 /target
+
+# IDE and editor
+.vscode
+.idea/
+*.swp
+*.swo
+*~
+
+# OS-specific
+.DS_Store
+Thumbs.db
+
+# Environment and secrets
+*.env
+.env.*
+
+# Test artifacts
 memista.*
 *.usearch
-.vscode
-*.env
+
+# Coverage reports
+*.profraw
+*.profdata
+lcov.info
+coverage/
+
+# Debug
+*.log
+*.pdb
