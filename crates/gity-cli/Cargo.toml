@@ -2,13 +2,13 @@
 name = "gity-cli"
 version = "0.1.0"
 edition = "2021"
-authors = ["Neul Labs"]
+authors = ["Dipankar Sarkar <me@dipankar.name>", "Neul Labs <https://neul.uk>"]
 description = "CLI interface for gity - Git repository acceleration daemon"
 documentation = "https://docs.rs/gity-cli"
 homepage = "https://github.com/neul-labs/gity"
 repository = "https://github.com/neul-labs/gity"
 license = "MIT"
-keywords = ["git", "cli", "daemon"]
+keywords = ["git", "git-automation", "cli", "daemon", "command-line", "version-control"]
 categories = ["command-line-utilities"]
 
 [dependencies]

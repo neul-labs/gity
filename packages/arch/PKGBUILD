@@ -1,13 +1,16 @@
-# Maintainer: Neul Labs <hello@neul.ai>
+# Maintainer: Dipankar Sarkar <me@dipankar.name>
+# Contributor: Neul Labs <https://neul.uk>
+# AUR: https://aur.archlinux.org/packages/gity
 
 pkgname=gity
 pkgver=VERSION
 pkgrel=1
-pkgdesc="Fast Git helper daemon"
+pkgdesc="Make large Git repositories feel instant - a lightweight daemon that accelerates Git operations"
 arch=('x86_64' 'aarch64')
 url="https://github.com/neul-labs/gity"
 license=('MIT')
 depends=('libc')
+
 source_x86_64=("https://github.com/neul-labs/gity/releases/download/v${pkgver}/gity-${pkgver}-x86_64-unknown-linux-gnu.tar.gz")
 source_aarch64=("https://github.com/neul-labs/gity/releases/download/v${pkgver}/gity-${pkgver}-aarch64-unknown-linux-gnu.tar.gz")
 sha256sums_x86_64=('SKIP')

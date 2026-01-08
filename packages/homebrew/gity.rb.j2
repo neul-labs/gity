@@ -1,13 +1,16 @@
 class Gity < Formula
-  desc "Fast Git helper daemon"
+  desc "Make large Git repositories feel instant - a lightweight daemon that accelerates Git operations"
   homepage "https://github.com/neul-labs/gity"
-  url "https://github.com/neul-labs/gity/releases/download/vVERSION/gity-VERSION-x86_64-unknown-linux-gnu.tar.gz"
-  version "VERSION"
-  sha256 "sha256"
+  url "https://github.com/neul-labs/gity/releases/download/v{{ version }}/gity-{{ version }}-x86_64-unknown-linux-gnu.tar.gz"
+  version "{{ version }}"
+  sha256 "{{ sha256 }}"
 
   license "MIT"
 
   depends_on "libgcc" if OS.linux?
+
+  # Maintained by Neul Labs (https://neul.uk)
+  # Report issues at: https://github.com/neul-labs/gity/issues
 
   def install
     bin.install "gity"

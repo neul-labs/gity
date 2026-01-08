@@ -2,13 +2,13 @@
 name = "gity-storage"
 version = "0.1.0"
 edition = "2021"
-authors = ["Neul Labs"]
+authors = ["Dipankar Sarkar <me@dipankar.name>", "Neul Labs <https://neul.uk>"]
 description = "Persistent storage layer for gity using sled"
 documentation = "https://docs.rs/gity-storage"
 homepage = "https://github.com/neul-labs/gity"
 repository = "https://github.com/neul-labs/gity"
 license = "MIT"
-keywords = ["storage", "database", "sled"]
+keywords = ["storage", "database", "sled", "embedded-database", "key-value", "persistent-storage"]
 categories = ["database"]
 
 [dependencies]

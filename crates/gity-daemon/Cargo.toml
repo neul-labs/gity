@@ -2,13 +2,13 @@
 name = "gity-daemon"
 version = "0.1.0"
 edition = "2021"
-authors = ["Neul Labs"]
+authors = ["Dipankar Sarkar <me@dipankar.name>", "Neul Labs <https://neul.uk>"]
 description = "Background daemon for gity - handles file watching, caching, and Git maintenance"
 documentation = "https://docs.rs/gity-daemon"
 homepage = "https://github.com/neul-labs/gity"
 repository = "https://github.com/neul-labs/gity"
 license = "MIT"
-keywords = ["git", "daemon", "fsmonitor", "watcher"]
+keywords = ["git", "daemon", "fsmonitor", "watcher", "file-watcher", "git-operations", "background-service"]
 categories = ["development-tools", "filesystem"]
 
 [dependencies]

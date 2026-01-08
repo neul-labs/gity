@@ -2,13 +2,13 @@
 name = "gity-tray"
 version = "0.1.0"
 edition = "2021"
-authors = ["Neul Labs"]
+authors = ["Dipankar Sarkar <me@dipankar.name>", "Neul Labs <https://neul.uk>"]
 description = "Cross-platform system tray UI for gity"
 documentation = "https://docs.rs/gity-tray"
 homepage = "https://github.com/neul-labs/gity"
 repository = "https://github.com/neul-labs/gity"
 license = "MIT"
-keywords = ["tray", "gui", "system-tray"]
+keywords = ["tray", "gui", "system-tray", "system-tray-icon", "menu-bar", "cross-platform-gui"]
 categories = ["gui"]
 
 [dependencies]

@@ -1,7 +1,7 @@
 {
   "name": "gity-cli",
   "version": "0.1.0",
-  "description": "Fast Git helper daemon - Make large Git repositories feel instant",
+  "description": "Make large Git repositories feel instant - a lightweight daemon that accelerates Git operations",
   "main": "lib/cli.js",
   "bin": {
     "gity": "./lib/cli.js"
@@ -11,12 +11,24 @@
   },
   "keywords": [
     "git",
+    "git-automation",
+    "git-performance",
     "fsmonitor",
-    "performance",
+    "version-control",
+    "developer-tools",
+    "cli",
     "daemon",
-    "cli"
+    "prefetch",
+    "git-status",
+    "repo-management"
   ],
-  "author": "Neul Labs <hello@neul.ai>",
+  "author": "Dipankar Sarkar <me@dipankar.name>",
+  "contributors": [
+    {
+      "name": "Neul Labs",
+      "url": "https://neul.uk"
+    }
+  ],
   "license": "MIT",
   "repository": {
     "type": "git",

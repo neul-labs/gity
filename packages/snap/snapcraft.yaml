@@ -1,15 +1,16 @@
 name: gity
 version: "0.1.0"
-summary: Fast Git helper daemon
+summary: Make large Git repositories feel instant
 description: |
   Gity accelerates Git operations by providing a background daemon that
   handles fsmonitor, prefetching, and maintenance tasks.
 
   Features:
-  * Git fsmonitor integration for faster status commands
-  * Background prefetch of remote refs
-  * Automated maintenance scheduling
-  * Cross-platform support (Linux, macOS, Windows)
+  - Git fsmonitor integration for faster status commands
+  - Background prefetch of remote refs
+  - Automated maintenance scheduling
+  - Cross-platform support (Linux, macOS, Windows)
+  - Written in Rust for maximum performance
 
 grade: stable
 confinement: strict

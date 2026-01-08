@@ -2,13 +2,13 @@
 name = "gity-git"
 version = "0.1.0"
 edition = "2021"
-authors = ["Neul Labs"]
+authors = ["Dipankar Sarkar <me@dipankar.name>", "Neul Labs <https://neul.uk>"]
 description = "Git operations library for gity"
 documentation = "https://docs.rs/gity-git"
 homepage = "https://github.com/neul-labs/gity"
 repository = "https://github.com/neul-labs/gity"
 license = "MIT"
-keywords = ["git", "libgit2"]
+keywords = ["git", "libgit2", "git-library", "version-control", "git-operations"]
 categories = ["development-tools"]
 
 [dependencies]

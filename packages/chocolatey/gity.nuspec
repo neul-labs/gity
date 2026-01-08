@@ -3,11 +3,12 @@
   <metadata>
     <id>gity</id>
     <version>0.1.0</version>
-    <title>Gity</title>
-    <authors>Neul Labs</authors>
+    <title>Gity - Git Repository Accelerator</title>
+    <authors>Dipankar Sarkar</authors>
+    <owners>Dipankar Sarkar</owners>
     <projectUrl>https://github.com/neul-labs/gity</projectUrl>
     <iconUrl>https://github.com/neul-labs/gity/raw/main/assets/logo.png</iconUrl>
-    <copyright>2024 Neul Labs</copyright>
+    <copyright>2026 Neul Labs</copyright>
     <licenseUrl>https://github.com/neul-labs/gity/blob/main/LICENSE</licenseUrl>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
     <description>
@@ -15,13 +16,14 @@
       handles fsmonitor, prefetching, and maintenance tasks.
 
       Features:
-      * Git fsmonitor integration for faster status commands
-      * Background prefetch of remote refs
-      * Automated maintenance scheduling
-      * Cross-platform support (Linux, macOS, Windows)
+      - Git fsmonitor integration for faster status commands
+      - Background prefetch of remote refs
+      - Automated maintenance scheduling
+      - Cross-platform support (Linux, macOS, Windows)
+      - Written in Rust for maximum performance
     </description>
-    <summary>Fast Git helper daemon</summary>
-    <tags>git fsmonitor cli windows</tags>
+    <summary>Make large Git repositories feel instant</summary>
+    <tags>git git-automation fsmonitor version-control developer-tools cli daemon prefetch windows</tags>
     <releaseNotes>See https://github.com/neul-labs/gity/releases</releaseNotes>
   </metadata>
   <files>

@@ -2,13 +2,13 @@
 name = "gity-ipc"
 version = "0.1.0"
 edition = "2021"
-authors = ["Neul Labs"]
+authors = ["Dipankar Sarkar <me@dipankar.name>", "Neul Labs <https://neul.uk>"]
 description = "IPC protocol and message types for gity daemon communication"
 documentation = "https://docs.rs/gity-ipc"
 homepage = "https://github.com/neul-labs/gity"
 repository = "https://github.com/neul-labs/gity"
 license = "MIT"
-keywords = ["ipc", "protocol", "messaging"]
+keywords = ["ipc", "protocol", "messaging", "inter-process", "async-communication", "serialization"]
 categories = ["development-tools"]
 
 [dependencies]

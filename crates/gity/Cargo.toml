@@ -2,14 +2,14 @@
 name = "gity"
 version = "0.1.0"
 edition = "2021"
-authors = ["Neul Labs"]
+authors = ["Dipankar Sarkar <me@dipankar.name>", "Neul Labs <https://neul.uk>"]
 description = "Make large Git repositories feel instant - a lightweight daemon that accelerates Git operations"
 documentation = "https://docs.rs/gity"
 readme = "../../README.md"
 homepage = "https://github.com/neul-labs/gity"
 repository = "https://github.com/neul-labs/gity"
 license = "MIT"
-keywords = ["git", "fsmonitor", "performance", "daemon", "cli"]
+keywords = ["git", "git-automation", "git-performance", "fsmonitor", "version-control", "developer-tools", "cli", "daemon", "prefetch", "git-status"]
 categories = ["command-line-utilities", "development-tools", "filesystem"]
 
 [dependencies]

@@ -15,16 +15,33 @@ classifiers = [
     "Operating System :: Microsoft :: Windows",
     "Programming Language :: Rust",
     "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Version Control :: Git",
 ]
-keywords = ["git", "fsmonitor", "performance", "daemon", "cli"]
+keywords = [
+    "git",
+    "git-automation",
+    "git-performance",
+    "fsmonitor",
+    "version-control",
+    "developer-tools",
+    "cli",
+    "daemon",
+    "prefetch",
+    "git-status",
+    "repo-management"
+]
 authors = [
-    {name = "Neul Labs", email = "hello@neul.ai"}
+    {name = "Dipankar Sarkar", email = "me@dipankar.name"},
+    {name = "Neul Labs", email = "hello@neul.uk"}
 ]
 
 [project.urls]
 Homepage = "https://github.com/neul-labs/gity"
 Repository = "https://github.com/neul-labs/gity"
-Changelog = "https://github.com/neul-labs/gity/blob/main/CHANGELOG.md"
+Changelog = "https://github.com/neul-labs/gity/releases"
+Issues = "https://github.com/neul-labs/gity/issues"
 
 [project.scripts]
 gity = "gity.cli:main"
