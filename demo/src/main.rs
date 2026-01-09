@@ -1,3 +1,6 @@
+mod phases;
+mod tui;
+
 use anyhow::{Context, Result};
 use clap::Parser;
 use indicatif::{ProgressBar, ProgressStyle};
@@ -37,6 +40,10 @@ struct Args {
     /// Path to gity binary (defaults to searching PATH)
     #[arg(long)]
     gity_bin: Option<PathBuf>,
+
+    /// Use classic text-based output (no TUI)
+    #[arg(long)]
+    classic: bool,
 }
 
 #[derive(Default)]
@@ -77,7 +84,159 @@ impl PhaseStats {
 
 fn main() -> Result<()> {
     let args = Args::parse();
-    run_demo(args)
+    if args.classic {
+        run_demo(args)
+    } else {
+        run_tui_demo(args)
+    }
+}
+
+fn run_tui_demo(args: Args) -> Result<()> {
+    let gity_repo = args.repo_path.join("gity-demo-with");
+    let baseline_repo = args.repo_path.join("gity-demo-without");
+
+    // Find gity binary
+    let gity_bin = args
+        .gity_bin
+        .clone()
+        .unwrap_or_else(|| PathBuf::from("gity"));
+
+    // Setup repositories if needed
+    if !args.skip_setup {
+        setup_repositories(&gity_repo, &baseline_repo, args.files)?;
+    }
+
+    // Verify repos exist
+    if !gity_repo.exists() || !baseline_repo.exists() {
+        anyhow::bail!(
+            "Test repositories not found. Run without --skip-setup to create them.\n\
+             Expected:\n  - {}\n  - {}",
+            gity_repo.display(),
+            baseline_repo.display()
+        );
+    }
+
+    // Ensure gity daemon is running and register the repo
+    println!("Setting up gity...");
+    setup_gity(&gity_bin, &gity_repo)?;
+
+    // Count files for display
+    let file_count = collect_file_paths(&gity_repo)?.len();
+    println!("Repository has {} files\n", file_count);
+
+    // Give gity a moment to fully initialize file watchers
+    println!("Waiting for gity to initialize watchers...");
+    std::thread::sleep(Duration::from_secs(2));
+
+    // Initialize TUI (fallback to classic mode if terminal unavailable)
+    let terminal_result = tui::init_terminal();
+    match terminal_result {
+        Ok(mut terminal) => {
+            // Run TUI demo
+            let result = run_tui_phases(&mut terminal, &gity_repo, &baseline_repo, &gity_bin, file_count);
+
+            // Restore terminal
+            tui::restore_terminal(&mut terminal)?;
+
+            // Check for errors
+            result?;
+        }
+        Err(e) => {
+            eprintln!("TUI unavailable ({}), falling back to classic mode...\n", e);
+            // Recreate args with classic flag for fallback
+            let classic_args = Args {
+                files: args.files,
+                iterations: args.iterations,
+                skip_setup: true, // Already set up
+                keep_repos: args.keep_repos,
+                stop_daemon: args.stop_daemon,
+                repo_path: args.repo_path.clone(),
+                gity_bin: args.gity_bin.clone(),
+                classic: true,
+            };
+            return run_demo(classic_args);
+        }
+    }
+
+    // Cleanup unless --keep-repos is specified
+    cleanup_demo(&args, &gity_bin, &gity_repo, &baseline_repo)?;
+
+    Ok(())
+}
+
+fn run_tui_phases(
+    terminal: &mut tui::Term,
+    gity_repo: &Path,
+    baseline_repo: &Path,
+    gity_bin: &Path,
+    file_count: usize,
+) -> Result<()> {
+    let mut state = tui::DemoState::default();
+    state.file_count = file_count;
+
+    // Run all phases
+    phases::run_all_phases(terminal, &mut state, gity_repo, baseline_repo, gity_bin)?;
+
+    // Show summary and wait for keypress
+    phases::show_summary(terminal, &mut state)?;
+
+    Ok(())
+}
+
+fn cleanup_demo(args: &Args, gity_bin: &Path, gity_repo: &Path, baseline_repo: &Path) -> Result<()> {
+    if !args.keep_repos {
+        println!("\nCleaning up...");
+
+        // Unregister the gity-enabled repo
+        if let Err(e) = unregister_gity(gity_bin, gity_repo) {
+            eprintln!("Warning: Failed to unregister repo: {}", e);
+        }
+
+        // Verify unregistration worked
+        if !verify_cleanup(gity_bin, gity_repo) {
+            eprintln!("Warning: Repository may still be registered in gity");
+        }
+
+        // Delete repository directories
+        if let Err(e) = std::fs::remove_dir_all(gity_repo) {
+            eprintln!("Warning: Failed to remove {}: {}", gity_repo.display(), e);
+        }
+        if let Err(e) = std::fs::remove_dir_all(baseline_repo) {
+            eprintln!("Warning: Failed to remove {}: {}", baseline_repo.display(), e);
+        }
+
+        // Stop daemon first (required to release database lock for compaction)
+        if args.stop_daemon {
+            if let Ok(status) = Command::new(gity_bin).args(["daemon", "stop"]).status() {
+                if status.success() {
+                    println!("Gity daemon stopped.");
+                    // Wait for daemon to fully release database lock
+                    std::thread::sleep(Duration::from_millis(500));
+                }
+            }
+
+            // Compact database to reclaim space (only possible after daemon stopped)
+            println!("Compacting gity database...");
+            if let Ok(output) = Command::new(gity_bin).args(["db", "compact"]).output() {
+                if !output.status.success() {
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    eprintln!("Warning: Database compaction failed: {}", stderr.trim());
+                }
+            }
+        }
+
+        println!("Test repositories cleaned up.");
+    } else {
+        // Unregister but keep repos
+        if let Err(e) = unregister_gity(gity_bin, gity_repo) {
+            eprintln!("Warning: Failed to unregister repo: {}", e);
+        }
+        println!("\nWARNING: Keeping test repositories (--keep-repos was specified).");
+        println!("  These can be large! Clean up manually when done:");
+        println!("    rm -rf {} {}", gity_repo.display(), baseline_repo.display());
+    }
+
+    Ok(())
 }
 
 fn run_demo(args: Args) -> Result<()> {
@@ -131,58 +290,8 @@ fn run_demo(args: Args) -> Result<()> {
     // Print summary
     print_summary(file_paths.len(), &phase1_stats, &phase2_stats, &phase3_stats);
 
-    // Cleanup unless --keep-repos is specified
-    if !args.keep_repos {
-        println!("\nCleaning up...");
-
-        // Unregister the gity-enabled repo
-        if let Err(e) = unregister_gity(&gity_bin, &gity_repo) {
-            eprintln!("Warning: Failed to unregister repo: {}", e);
-        }
-
-        // Verify unregistration worked
-        if !verify_cleanup(&gity_bin, &gity_repo) {
-            eprintln!("Warning: Repository may still be registered in gity");
-        }
-
-        // Delete repository directories
-        if let Err(e) = std::fs::remove_dir_all(&gity_repo) {
-            eprintln!("Warning: Failed to remove {}: {}", gity_repo.display(), e);
-        }
-        if let Err(e) = std::fs::remove_dir_all(&baseline_repo) {
-            eprintln!("Warning: Failed to remove {}: {}", baseline_repo.display(), e);
-        }
-
-        // Stop daemon first (required to release database lock for compaction)
-        if args.stop_daemon {
-            if let Ok(status) = Command::new(&gity_bin).args(["daemon", "stop"]).status() {
-                if status.success() {
-                    println!("Gity daemon stopped.");
-                    // Wait for daemon to fully release database lock
-                    std::thread::sleep(Duration::from_millis(500));
-                }
-            }
-
-            // Compact database to reclaim space (only possible after daemon stopped)
-            println!("Compacting gity database...");
-            if let Ok(output) = Command::new(&gity_bin).args(["db", "compact"]).output() {
-                if !output.status.success() {
-                    let stderr = String::from_utf8_lossy(&output.stderr);
-                    eprintln!("Warning: Database compaction failed: {}", stderr.trim());
-                }
-            }
-        }
-
-        println!("Test repositories cleaned up.");
-    } else {
-        // Unregister but keep repos
-        if let Err(e) = unregister_gity(&gity_bin, &gity_repo) {
-            eprintln!("Warning: Failed to unregister repo: {}", e);
-        }
-        println!("\nWARNING: Keeping test repositories (--keep-repos was specified).");
-        println!("  These can be large! Clean up manually when done:");
-        println!("    rm -rf {} {}", gity_repo.display(), baseline_repo.display());
-    }
+    // Cleanup
+    cleanup_demo(&args, &gity_bin, &gity_repo, &baseline_repo)?;
 
     Ok(())
 }

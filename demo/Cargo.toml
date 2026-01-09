@@ -8,6 +8,7 @@ description = "Demo tool to showcase gity's performance benefits"
 clap = { version = "4", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }
 crossterm = "0.28"
+ratatui = "0.29"
 indicatif = "0.17"
 rand = "0.8"
 git2 = "0.19"
