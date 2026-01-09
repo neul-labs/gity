@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Demo TUI Mode**: Conference-ready visual demo with ratatui
+  - Live race visualization showing gity vs vanilla git side-by-side
+  - Progress bars with real-time timing updates
+  - 5-act narrative workflow (Morning Check-in, Coding Session, Commit Flow, Branch Switching, Background Magic)
+  - Summary table with speedup metrics and time saved estimates
+  - Color-coded results (green for gity, red for baseline)
+  - Automatic fallback to classic text mode when terminal unavailable
+
+- **Performance Improvements**:
+  - Added mimalloc global allocator for faster memory allocation
+  - Adaptive poll interval (50ms active, 250ms idle, 500ms very idle)
+  - Memory-mapped fsmonitor cache for zero-copy responses
+
+### Changed
+
+- Demo now defaults to TUI mode; use `--classic` flag for text-based output
+
 ## [0.1.0] - 2024-12-09
 
 ### Added
