@@ -1250,6 +1250,8 @@ dependencies = [
  "gity-tray",
  "hex",
  "libc",
+ "memmap2",
+ "mimalloc",
  "serde",
  "serde_json",
  "sha1",
@@ -1280,8 +1282,11 @@ dependencies = [
  "gity-ipc",
  "gity-storage",
  "gity-watch",
+ "hex",
+ "memmap2",
  "nng",
  "serde",
+ "sha1",
  "sled",
  "sysinfo",
  "tempfile",
@@ -1321,6 +1326,7 @@ dependencies = [
  "sled",
  "tempfile",
  "thiserror 1.0.69",
+ "tracing",
 ]
 
 [[package]]
@@ -1874,6 +1880,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "libmimalloc-sys"
+version = "0.1.44"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "667f4fec20f29dfc6bc7357c582d91796c169ad7e2fce709468aefeb2c099870"
+dependencies = [
+ "cc",
+ "libc",
+]
+
+[[package]]
 name = "libredox"
 version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2012,6 +2028,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "488016bfae457b036d996092f6cb448677611ce4449e970ceaf42695203f218a"
 dependencies = [
  "autocfg",
+]
+
+[[package]]
+name = "mimalloc"
+version = "0.1.48"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e1ee66a4b64c74f4ef288bcbb9192ad9c3feaad75193129ac8509af543894fd8"
+dependencies = [
+ "libmimalloc-sys",
 ]
 
 [[package]]

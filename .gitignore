@@ -29,3 +29,6 @@ coverage/
 # Debug
 *.log
 *.pdb
+
+# Demo artifacts
+demo/target/

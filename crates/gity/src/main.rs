@@ -1,3 +1,8 @@
+use mimalloc::MiMalloc;
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
+
 mod daemon_launcher;
 mod paths;
 mod status_cache;
@@ -82,6 +87,9 @@ async fn run_client_action(
             run_oneshot_daemon(address, events_address, repo_path).await
         }
         CliAction::RunTray => run_tray(address).await,
+        CliAction::DbStats => run_db_stats().await,
+        CliAction::DbCompact => run_db_compact().await,
+        CliAction::DbPruneLogs { older_than_days } => run_db_prune_logs(older_than_days).await,
     }
 }
 
@@ -239,6 +247,26 @@ async fn run_fsmonitor_helper(
     }
     let repo_path = resolve_repo_path(repo_override)?;
     let known_generation = token.as_deref().and_then(|value| value.parse::<u64>().ok());
+
+    // Try reading from mmap cache first (fast path)
+    if let Some(known_gen) = known_generation {
+        if let Ok(paths) = GityPaths::discover() {
+            let cache_dir = paths.data_dir().join("fsmonitor_cache");
+            if let Ok(cache) = gity_daemon::FsMonitorCache::new(cache_dir) {
+                // Check if cached generation matches
+                if let Ok(Some(cached_gen)) = cache.read_generation(&repo_path) {
+                    if cached_gen == known_gen {
+                        // Generation unchanged, return cached snapshot (empty dirty paths)
+                        if let Ok(Some(snapshot)) = cache.read(&repo_path) {
+                            return emit_fsmonitor_payload(version, &snapshot).map_err(map_io_error);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Cache miss or stale - fall through to IPC
     let client = NngClient::new(address.to_string());
     let validated = validated_path(repo_path.clone())?;
     let response = request_with_restart(
@@ -378,6 +406,88 @@ async fn run_stop_daemon(address: &str) -> Result<(), CliError> {
             Ok(())
         }
         Err(err) => Err(CliError::Daemon(err)),
+    }
+}
+
+async fn run_db_stats() -> Result<(), CliError> {
+    let paths = GityPaths::discover().map_err(map_io_error)?;
+    let storage = StorageContext::new(paths.data_dir()).map_err(map_storage_error)?;
+    let stats = storage.stats().map_err(map_storage_error)?;
+
+    println!("Database Statistics:");
+    println!("  Data directory: {}", paths.data_dir().display());
+    println!("  Metadata size: {}", format_bytes(stats.metadata_size_bytes));
+    println!("  Logs size: {}", format_bytes(stats.logs_size_bytes));
+    println!(
+        "  Total size: {}",
+        format_bytes(stats.metadata_size_bytes + stats.logs_size_bytes)
+    );
+    println!("  Registered repos: {}", stats.repo_count);
+    println!("  Log entries: {}", stats.log_entry_count);
+    Ok(())
+}
+
+async fn run_db_compact() -> Result<(), CliError> {
+    let paths = GityPaths::discover().map_err(map_io_error)?;
+    let storage = StorageContext::new(paths.data_dir()).map_err(map_storage_error)?;
+
+    let before = storage.stats().map_err(map_storage_error)?;
+    let before_size = before.metadata_size_bytes + before.logs_size_bytes;
+
+    println!("Compacting databases...");
+    storage.compact_all().map_err(map_storage_error)?;
+
+    let after = storage.stats().map_err(map_storage_error)?;
+    let after_size = after.metadata_size_bytes + after.logs_size_bytes;
+
+    println!("Compaction complete.");
+    println!(
+        "  Before: {}",
+        format_bytes(before_size)
+    );
+    println!(
+        "  After: {}",
+        format_bytes(after_size)
+    );
+    if before_size > after_size {
+        println!(
+            "  Reclaimed: {}",
+            format_bytes(before_size - after_size)
+        );
+    }
+    Ok(())
+}
+
+async fn run_db_prune_logs(older_than_days: u64) -> Result<(), CliError> {
+    let paths = GityPaths::discover().map_err(map_io_error)?;
+    let storage = StorageContext::new(paths.data_dir()).map_err(map_storage_error)?;
+
+    let max_age = Duration::from_secs(older_than_days * 24 * 60 * 60);
+    println!(
+        "Pruning log entries older than {} days...",
+        older_than_days
+    );
+
+    let pruned = storage
+        .prune_old_log_entries(max_age)
+        .map_err(map_storage_error)?;
+
+    println!("Pruned {} log entries.", pruned);
+    Ok(())
+}
+
+fn format_bytes(bytes: u64) -> String {
+    const UNITS: [&str; 5] = ["B", "KiB", "MiB", "GiB", "TiB"];
+    let mut value = bytes as f64;
+    let mut unit = 0;
+    while value >= 1024.0 && unit < UNITS.len() - 1 {
+        value /= 1024.0;
+        unit += 1;
+    }
+    if unit == 0 {
+        format!("{bytes} {}", UNITS[unit])
+    } else {
+        format!("{value:.1} {}", UNITS[unit])
     }
 }
 
@@ -623,11 +733,12 @@ async fn run_daemon(address: String, events_address: String) -> Result<(), CliEr
     let helper_command = fsmonitor_helper_command();
     let (notification_tx, notification_rx) = mpsc::unbounded_channel();
     let log_tree = storage.log_tree().map_err(map_storage_error)?;
-    let runtime = Runtime::with_notifications(
+    let runtime = Runtime::with_notifications_and_data_dir(
         store,
         Some(notification_tx),
         helper_command.clone(),
         Some(log_tree),
+        paths.data_dir().to_path_buf(),
     );
     let shutdown = runtime.shutdown_signal();
     let shared = runtime.shared();

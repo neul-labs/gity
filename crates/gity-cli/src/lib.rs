@@ -75,6 +75,23 @@ pub enum Commands {
     /// Talk to the daemon control plane.
     #[command(subcommand)]
     Daemon(DaemonCommands),
+    /// Database maintenance operations.
+    #[command(subcommand)]
+    Db(DbCommands),
+}
+
+#[derive(Debug, Subcommand)]
+pub enum DbCommands {
+    /// Show database statistics (size, entry counts).
+    Stats,
+    /// Compact database files to reclaim space.
+    Compact,
+    /// Prune old log entries from persistent storage.
+    PruneLogs {
+        /// Maximum age in days (entries older than this are removed).
+        #[arg(long, default_value = "7")]
+        older_than: u64,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -139,6 +156,11 @@ pub enum CliAction {
         repo_path: PathBuf,
     },
     RunTray,
+    DbStats,
+    DbCompact,
+    DbPruneLogs {
+        older_than_days: u64,
+    },
 }
 
 impl Cli {
@@ -209,6 +231,13 @@ impl Cli {
                         job: job.into(),
                     }))
                 }
+            },
+            Commands::Db(cmd) => match cmd {
+                DbCommands::Stats => Ok(CliAction::DbStats),
+                DbCommands::Compact => Ok(CliAction::DbCompact),
+                DbCommands::PruneLogs { older_than } => Ok(CliAction::DbPruneLogs {
+                    older_than_days: older_than,
+                }),
             },
         }
     }

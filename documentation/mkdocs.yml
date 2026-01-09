@@ -36,6 +36,7 @@ nav:
   - Getting Started:
       - Installation: getting-started/installation.md
       - Quick Start: getting-started/quick-start.md
+      - Performance Demo: getting-started/demo.md
   - User Guide:
       - Registering Repositories: user-guide/registering-repos.md
       - Commands: user-guide/commands.md

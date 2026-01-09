@@ -1,4 +1,5 @@
 mod events;
+mod fsmonitor_cache;
 mod logs;
 mod metrics;
 
@@ -12,6 +13,7 @@ use async_nng::AsyncSocket;
 use async_trait::async_trait;
 use bincode::Options as BincodeOptions;
 pub use events::{NotificationServer, NotificationStream, NotificationSubscriber};
+pub use fsmonitor_cache::FsMonitorCache;
 use gity_git::{working_tree_status, RepoConfigurator};
 use gity_ipc::{
     bounded_bincode, validate_message_size, Ack, DaemonCommand, DaemonError, DaemonHealth,
@@ -86,6 +88,7 @@ pub struct Daemon<S: MetadataStore> {
     notifications: Option<NotificationSender>,
     fsmonitor_helper: Option<String>,
     logs: LogBook,
+    fsmonitor_cache: Option<FsMonitorCache>,
 }
 
 impl<S: MetadataStore> Daemon<S> {
@@ -96,11 +99,12 @@ impl<S: MetadataStore> Daemon<S> {
             None,
             None,
             LogBook::new(200),
+            None,
         )
     }
 
     pub fn with_metrics(store: S, metrics: MetricsRegistry) -> Self {
-        Self::with_components(store, metrics, None, None, LogBook::new(200))
+        Self::with_components(store, metrics, None, None, LogBook::new(200), None)
     }
 
     pub fn with_components(
@@ -109,6 +113,7 @@ impl<S: MetadataStore> Daemon<S> {
         notifications: Option<NotificationSender>,
         fsmonitor_helper: Option<String>,
         logs: LogBook,
+        fsmonitor_cache: Option<FsMonitorCache>,
     ) -> Self {
         Self {
             store,
@@ -118,6 +123,7 @@ impl<S: MetadataStore> Daemon<S> {
             notifications,
             fsmonitor_helper,
             logs,
+            fsmonitor_cache,
         }
     }
 
@@ -250,11 +256,16 @@ impl<S: MetadataStore> Daemon<S> {
                         .map(|known| known == current_generation)
                         .unwrap_or(false)
                 {
-                    return DaemonResponse::FsMonitorSnapshot(FsMonitorSnapshot {
+                    let snapshot = FsMonitorSnapshot {
                         repo_path: repo_path.as_path().to_path_buf(),
                         dirty_paths: Vec::new(),
                         generation: current_generation,
-                    });
+                    };
+                    // Write to mmap cache for fast subsequent reads
+                    if let Some(cache) = &self.fsmonitor_cache {
+                        let _ = cache.write(&repo_path, &snapshot);
+                    }
+                    return DaemonResponse::FsMonitorSnapshot(snapshot);
                 }
                 let generation = match self.store.bump_generation(&repo_path) {
                     Ok(new_generation) => new_generation,
@@ -262,11 +273,16 @@ impl<S: MetadataStore> Daemon<S> {
                 };
                 // Filter out .git internal paths - fsmonitor only wants working tree files
                 let working_tree_paths = filter_working_tree_paths(dirty_paths);
-                DaemonResponse::FsMonitorSnapshot(FsMonitorSnapshot {
+                let snapshot = FsMonitorSnapshot {
                     repo_path: repo_path.as_path().to_path_buf(),
                     dirty_paths: working_tree_paths,
                     generation,
-                })
+                };
+                // Write to mmap cache for fast subsequent reads
+                if let Some(cache) = &self.fsmonitor_cache {
+                    let _ = cache.write(&repo_path, &snapshot);
+                }
+                DaemonResponse::FsMonitorSnapshot(snapshot)
             }
             DaemonCommand::FetchLogs { repo_path, limit } => {
                 let entries = self.logs.recent(&repo_path, limit);
@@ -534,14 +550,23 @@ pub struct IdleScheduleConfig {
     pub maintenance_idle_secs: u64,
     /// Whether idle scheduling is enabled.
     pub enabled: bool,
+    /// Interval in seconds between log pruning checks.
+    pub log_prune_interval_secs: u64,
+    /// Maximum age in seconds for log entries before pruning.
+    pub log_max_age_secs: u64,
+    /// Interval in seconds between database compaction.
+    pub compact_interval_secs: u64,
 }
 
 impl Default for IdleScheduleConfig {
     fn default() -> Self {
         Self {
-            prefetch_idle_secs: 300,    // 5 minutes
-            maintenance_idle_secs: 600, // 10 minutes
+            prefetch_idle_secs: 300,        // 5 minutes
+            maintenance_idle_secs: 600,     // 10 minutes
             enabled: true,
+            log_prune_interval_secs: 3600,  // 1 hour
+            log_max_age_secs: 604800,       // 7 days
+            compact_interval_secs: 3600,    // 1 hour
         }
     }
 }
@@ -573,6 +598,54 @@ impl RepoIdleState {
     }
 }
 
+/// Adaptive poll interval that adjusts based on activity.
+/// Polls fast when active, slow when idle to save CPU.
+pub struct AdaptivePollInterval {
+    last_activity: Instant,
+    /// Poll interval when recently active (default: 50ms)
+    pub active_interval: Duration,
+    /// Poll interval when idle (default: 250ms)
+    pub idle_interval: Duration,
+    /// Poll interval when very idle (default: 500ms)
+    pub very_idle_interval: Duration,
+    /// Time before considered idle (default: 5s)
+    pub idle_threshold: Duration,
+    /// Time before considered very idle (default: 30s)
+    pub very_idle_threshold: Duration,
+}
+
+impl Default for AdaptivePollInterval {
+    fn default() -> Self {
+        Self {
+            last_activity: Instant::now(),
+            active_interval: Duration::from_millis(50),
+            idle_interval: Duration::from_millis(250),
+            very_idle_interval: Duration::from_millis(500),
+            idle_threshold: Duration::from_secs(5),
+            very_idle_threshold: Duration::from_secs(30),
+        }
+    }
+}
+
+impl AdaptivePollInterval {
+    /// Returns the current poll interval based on time since last activity.
+    pub fn current(&self) -> Duration {
+        let since_activity = self.last_activity.elapsed();
+        if since_activity < self.idle_threshold {
+            self.active_interval
+        } else if since_activity < self.very_idle_threshold {
+            self.idle_interval
+        } else {
+            self.very_idle_interval
+        }
+    }
+
+    /// Record activity to reset to fast polling.
+    pub fn touch(&mut self) {
+        self.last_activity = Instant::now();
+    }
+}
+
 /// Background scheduler loop.
 pub struct Runtime<S: MetadataStore> {
     daemon: SharedDaemon<S>,
@@ -581,7 +654,7 @@ pub struct Runtime<S: MetadataStore> {
     event_tx: mpsc::UnboundedSender<WatchEventEnvelope>,
     event_rx: Mutex<mpsc::UnboundedReceiver<WatchEventEnvelope>>,
     shutdown: Shutdown,
-    poll_interval: Duration,
+    adaptive_poll: Mutex<AdaptivePollInterval>,
     metrics: MetricsRegistry,
     notifications: Option<NotificationSender>,
     logs: LogBook,
@@ -591,6 +664,12 @@ pub struct Runtime<S: MetadataStore> {
     last_watcher_activity: Arc<Mutex<HashMap<PathBuf, Instant>>>,
     /// Tracks whether resource throttling is currently active
     throttling_active: Arc<AtomicBool>,
+    /// Last time log entries were pruned
+    last_prune_time: Arc<Mutex<Instant>>,
+    /// Last time database was compacted
+    last_compact_time: Arc<Mutex<Instant>>,
+    /// Data directory path for compaction (optional)
+    data_dir: Option<PathBuf>,
 }
 
 impl<S: MetadataStore> Runtime<S> {
@@ -614,12 +693,30 @@ impl<S: MetadataStore> Runtime<S> {
         fsmonitor_helper: Option<String>,
         log_tree: Option<sled::Tree>,
     ) -> Self {
-        Self::with_watcher_and_notifications(
+        Self::with_data_dir(
             store,
             Arc::new(NotifyWatcher::new()),
             notifications,
             fsmonitor_helper,
             log_tree,
+            None,
+        )
+    }
+
+    pub fn with_notifications_and_data_dir(
+        store: S,
+        notifications: Option<NotificationSender>,
+        fsmonitor_helper: Option<String>,
+        log_tree: Option<sled::Tree>,
+        data_dir: PathBuf,
+    ) -> Self {
+        Self::with_data_dir(
+            store,
+            Arc::new(NotifyWatcher::new()),
+            notifications,
+            fsmonitor_helper,
+            log_tree,
+            Some(data_dir),
         )
     }
 
@@ -630,12 +727,29 @@ impl<S: MetadataStore> Runtime<S> {
         fsmonitor_helper: Option<String>,
         log_tree: Option<sled::Tree>,
     ) -> Self {
+        Self::with_data_dir(store, watcher, notifications, fsmonitor_helper, log_tree, None)
+    }
+
+    pub fn with_data_dir(
+        store: S,
+        watcher: WatcherRef,
+        notifications: Option<NotificationSender>,
+        fsmonitor_helper: Option<String>,
+        log_tree: Option<sled::Tree>,
+        data_dir: Option<PathBuf>,
+    ) -> Self {
         let (event_tx, event_rx) = mpsc::unbounded_channel();
         let metrics = MetricsRegistry::default();
         let logs = log_tree
             .map(|tree| LogBook::with_persistence(200, tree))
             .unwrap_or_else(|| LogBook::new(200));
         let daemon_notifications = notifications.clone();
+        // Create fsmonitor cache if data_dir is provided
+        let fsmonitor_cache = data_dir.as_ref().and_then(|dir| {
+            FsMonitorCache::new(dir.join("fsmonitor_cache"))
+                .map_err(|e| warn!("failed to create fsmonitor cache: {}", e))
+                .ok()
+        });
         Self {
             daemon: Arc::new(Mutex::new(Daemon::with_components(
                 store,
@@ -643,13 +757,14 @@ impl<S: MetadataStore> Runtime<S> {
                 daemon_notifications,
                 fsmonitor_helper,
                 logs.clone(),
+                fsmonitor_cache,
             ))),
             watcher,
             active_watchers: Arc::new(Mutex::new(HashMap::new())),
             event_tx,
             event_rx: Mutex::new(event_rx),
             shutdown: Shutdown::new(),
-            poll_interval: Duration::from_millis(250),
+            adaptive_poll: Mutex::new(AdaptivePollInterval::default()),
             metrics,
             notifications,
             logs,
@@ -657,6 +772,9 @@ impl<S: MetadataStore> Runtime<S> {
             idle_states: Arc::new(Mutex::new(HashMap::new())),
             last_watcher_activity: Arc::new(Mutex::new(HashMap::new())),
             throttling_active: Arc::new(AtomicBool::new(false)),
+            last_prune_time: Arc::new(Mutex::new(Instant::now())),
+            last_compact_time: Arc::new(Mutex::new(Instant::now())),
+            data_dir,
         }
     }
 
@@ -685,9 +803,30 @@ impl<S: MetadataStore> Runtime<S> {
             if let Err(err) = self.sync_watchers().await {
                 eprintln!("failed to synchronize watchers: {err}");
             }
-            sleep(self.poll_interval).await;
+            // Use adaptive poll interval: fast when active, slow when idle
+            let poll_duration = self
+                .adaptive_poll
+                .lock()
+                .map(|guard| guard.current())
+                .unwrap_or(Duration::from_millis(250));
+            sleep(poll_duration).await;
         }
         self.stop_all_watchers();
+
+        // Perform final compaction on shutdown
+        if let Some(data_dir) = &self.data_dir {
+            info!("performing final compaction before shutdown");
+            match gity_storage::StorageContext::new(data_dir) {
+                Ok(storage) => {
+                    if let Err(e) = storage.compact_all() {
+                        warn!("shutdown compaction failed: {}", e);
+                    }
+                }
+                Err(e) => {
+                    warn!("failed to open storage for shutdown compaction: {}", e);
+                }
+            }
+        }
     }
 
     /// Check for repos that need reconciliation after daemon restart/downtime.
@@ -811,6 +950,44 @@ impl<S: MetadataStore> Runtime<S> {
         // Clean up states for repos that are no longer registered
         let repo_set: HashSet<_> = self.current_repo_paths().into_iter().collect();
         states.retain(|path, _| repo_set.contains(path));
+
+        // Drop the lock before global maintenance tasks
+        drop(states);
+
+        // Global maintenance: Log pruning
+        let prune_interval = Duration::from_secs(self.idle_config.log_prune_interval_secs);
+        if let Ok(mut last_prune) = self.last_prune_time.lock() {
+            if last_prune.elapsed() >= prune_interval {
+                let max_age = Duration::from_secs(self.idle_config.log_max_age_secs);
+                let pruned = self.logs.prune_old_entries(max_age);
+                if pruned > 0 {
+                    info!("pruned {} old log entries", pruned);
+                }
+                *last_prune = Instant::now();
+            }
+        }
+
+        // Global maintenance: Database compaction
+        if let Some(data_dir) = &self.data_dir {
+            let compact_interval = Duration::from_secs(self.idle_config.compact_interval_secs);
+            if let Ok(mut last_compact) = self.last_compact_time.lock() {
+                if last_compact.elapsed() >= compact_interval {
+                    match gity_storage::StorageContext::new(data_dir) {
+                        Ok(storage) => {
+                            if let Err(e) = storage.compact_all() {
+                                warn!("compaction failed: {}", e);
+                            } else {
+                                info!("database compaction completed");
+                            }
+                        }
+                        Err(e) => {
+                            warn!("failed to open storage for compaction: {}", e);
+                        }
+                    }
+                    *last_compact = Instant::now();
+                }
+            }
+        }
     }
 
     fn touch_repo_activity(&self, repo_path: &Path) {
@@ -1014,6 +1191,10 @@ impl<S: MetadataStore> Runtime<S> {
                     self.record_watcher_activity(&envelope.repo_path);
                     // Reset idle timer for this repo
                     self.touch_repo_activity(&envelope.repo_path);
+                    // Reset adaptive poll to fast mode on activity
+                    if let Ok(mut poll) = self.adaptive_poll.lock() {
+                        poll.touch();
+                    }
                     if let Ok(mut guard) = self.daemon.lock() {
                         guard.handle_watch_event(&envelope.repo_path, &envelope.event);
                         self.emit_watch_notification(&envelope.repo_path, &envelope.event);

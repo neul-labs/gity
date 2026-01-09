@@ -9,4 +9,5 @@ members = [
     "crates/gity-tray",
     "crates/gity-watch",
 ]
+exclude = ["demo"]
 resolver = "2"

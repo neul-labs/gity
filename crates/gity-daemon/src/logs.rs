@@ -96,6 +96,48 @@ impl LogBook {
                 }
             })
     }
+
+    /// Prune log entries older than max_age from persistent storage.
+    /// Returns the number of entries pruned.
+    pub fn prune_old_entries(&self, max_age: std::time::Duration) -> usize {
+        let Some(tree) = &self.tree else { return 0 };
+
+        let cutoff = SystemTime::now()
+            .checked_sub(max_age)
+            .unwrap_or(SystemTime::UNIX_EPOCH);
+        let cutoff_nanos = cutoff
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+
+        let keys_to_remove: Vec<_> = tree
+            .iter()
+            .filter_map(|result| result.ok())
+            .filter_map(|(key, _)| {
+                // Log key format: repo_path_bytes + 0x00 + timestamp_nanos_be_bytes (u128)
+                // The timestamp is in the last 16 bytes of the key
+                if key.len() < 17 {
+                    return None; // Invalid key format
+                }
+                let ts_bytes: [u8; 16] = key[key.len() - 16..].try_into().ok()?;
+                let timestamp_nanos = u128::from_be_bytes(ts_bytes);
+                if timestamp_nanos < cutoff_nanos {
+                    Some(key)
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        let mut pruned = 0;
+        for key in keys_to_remove {
+            if tree.remove(&key).is_ok() {
+                pruned += 1;
+            }
+        }
+
+        pruned
+    }
 }
 
 fn log_key(repo_path: &Path, timestamp: SystemTime) -> Vec<u8> {

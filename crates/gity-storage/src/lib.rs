@@ -8,6 +8,12 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use thiserror::Error;
+use tracing::warn;
+
+/// Maximum number of dirty paths to track per repository.
+/// When this limit is exceeded, the entire repo is marked as dirty (`.`)
+/// to avoid unbounded memory growth.
+const MAX_DIRTY_PATHS: usize = 10_000;
 
 pub type StorageResult<T> = Result<T, StorageError>;
 
@@ -167,6 +173,22 @@ impl MetadataStore for InMemoryMetadataStore {
         let entry = guard
             .get_mut(repo_path)
             .ok_or_else(|| StorageError::NotFound(repo_path.display().to_string()))?;
+
+        // Check if we've exceeded the dirty_paths limit
+        if entry.dirty_paths.len() >= MAX_DIRTY_PATHS {
+            // Already at limit - if first entry isn't ".", replace with "." to mark entire repo dirty
+            if entry.dirty_paths.first() != Some(&PathBuf::from(".")) {
+                warn!(
+                    repo = %repo_path.display(),
+                    "dirty_paths limit ({}) exceeded, marking entire repo dirty",
+                    MAX_DIRTY_PATHS
+                );
+                entry.dirty_paths.clear();
+                entry.dirty_paths.push(PathBuf::from("."));
+            }
+            return Ok(());
+        }
+
         if !entry.dirty_paths.contains(&path) {
             entry.dirty_paths.push(path);
         }
@@ -309,6 +331,21 @@ impl MetadataStore for SledMetadataStore {
 
     fn mark_dirty_path(&self, repo_path: &Path, path: PathBuf) -> StorageResult<()> {
         self.update_repo(repo_path, |meta| {
+            // Check if we've exceeded the dirty_paths limit
+            if meta.dirty_paths.len() >= MAX_DIRTY_PATHS {
+                // Already at limit - if first entry isn't ".", replace with "." to mark entire repo dirty
+                if meta.dirty_paths.first() != Some(&PathBuf::from(".")) {
+                    warn!(
+                        repo = %repo_path.display(),
+                        "dirty_paths limit ({}) exceeded, marking entire repo dirty",
+                        MAX_DIRTY_PATHS
+                    );
+                    meta.dirty_paths.clear();
+                    meta.dirty_paths.push(PathBuf::from("."));
+                }
+                return;
+            }
+
             if !meta.dirty_paths.contains(&path) {
                 meta.dirty_paths.push(path);
             }
@@ -443,6 +480,19 @@ pub struct StorageContext {
     log_path: PathBuf,
 }
 
+/// Statistics about the database storage.
+#[derive(Debug, Clone)]
+pub struct DbStats {
+    /// Total size of metadata database directory in bytes.
+    pub metadata_size_bytes: u64,
+    /// Total size of logs database directory in bytes.
+    pub logs_size_bytes: u64,
+    /// Number of registered repositories.
+    pub repo_count: usize,
+    /// Total number of log entries.
+    pub log_entry_count: usize,
+}
+
 impl StorageContext {
     /// Creates the metadata directory (if missing) beneath `data_root`.
     pub fn new(data_root: impl AsRef<Path>) -> StorageResult<Self> {
@@ -469,6 +519,105 @@ impl StorageContext {
     pub fn metadata_path(&self) -> &Path {
         &self.metadata_path
     }
+
+    pub fn log_path(&self) -> &Path {
+        &self.log_path
+    }
+
+    /// Compact both metadata and logs databases to reclaim space.
+    pub fn compact_all(&self) -> StorageResult<()> {
+        // Open and flush metadata database
+        let meta_db = sled::open(&self.metadata_path).map_err(map_sled_err)?;
+        meta_db.flush().map_err(map_sled_err)?;
+
+        // Open and flush logs database
+        let log_db = sled::open(&self.log_path).map_err(map_sled_err)?;
+        log_db.flush().map_err(map_sled_err)?;
+
+        Ok(())
+    }
+
+    /// Get statistics about the database storage.
+    pub fn stats(&self) -> StorageResult<DbStats> {
+        let metadata_size_bytes = dir_size(&self.metadata_path);
+        let logs_size_bytes = dir_size(&self.log_path);
+
+        let store = self.metadata_store()?;
+        let repo_count = store.list_repos()?.len();
+
+        let log_tree = self.log_tree()?;
+        let log_entry_count = log_tree.len();
+
+        Ok(DbStats {
+            metadata_size_bytes,
+            logs_size_bytes,
+            repo_count,
+            log_entry_count,
+        })
+    }
+
+    /// Prune log entries older than the specified duration.
+    /// Returns the number of entries pruned.
+    pub fn prune_old_log_entries(&self, max_age: Duration) -> StorageResult<usize> {
+        let log_tree = self.log_tree()?;
+        let cutoff = SystemTime::now()
+            .checked_sub(max_age)
+            .unwrap_or(UNIX_EPOCH);
+        let cutoff_nanos = cutoff
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_else(|_| Duration::from_secs(0))
+            .as_nanos();
+
+        let mut pruned = 0;
+        let keys_to_remove: Vec<_> = log_tree
+            .iter()
+            .filter_map(|result| result.ok())
+            .filter_map(|(key, _)| {
+                // Log key format: repo_path_bytes + 0x00 + timestamp_nanos_be_bytes (u128)
+                // The timestamp is in the last 16 bytes of the key
+                if key.len() < 17 {
+                    return None; // Invalid key format
+                }
+                let ts_bytes: [u8; 16] = key[key.len() - 16..].try_into().ok()?;
+                let timestamp_nanos = u128::from_be_bytes(ts_bytes);
+                if timestamp_nanos < cutoff_nanos {
+                    Some(key)
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        for key in keys_to_remove {
+            if log_tree.remove(&key).is_ok() {
+                pruned += 1;
+            }
+        }
+
+        // Flush after pruning
+        if pruned > 0 {
+            let db = sled::open(&self.log_path).map_err(map_sled_err)?;
+            db.flush().map_err(map_sled_err)?;
+        }
+
+        Ok(pruned)
+    }
+}
+
+/// Calculate total size of a directory recursively.
+fn dir_size(path: &Path) -> u64 {
+    let mut total = 0;
+    if let Ok(entries) = fs::read_dir(path) {
+        for entry in entries.flatten() {
+            let entry_path = entry.path();
+            if entry_path.is_dir() {
+                total += dir_size(&entry_path);
+            } else if let Ok(metadata) = entry.metadata() {
+                total += metadata.len();
+            }
+        }
+    }
+    total
 }
 
 #[cfg(test)]

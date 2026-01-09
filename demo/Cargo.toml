@@ -1,0 +1,14 @@
+[package]
+name = "gity-demo"
+version = "0.1.0"
+edition = "2021"
+description = "Demo tool to showcase gity's performance benefits"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+tokio = { version = "1", features = ["full"] }
+crossterm = "0.28"
+indicatif = "0.17"
+rand = "0.8"
+git2 = "0.19"
+anyhow = "1"
