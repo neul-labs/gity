@@ -8,7 +8,7 @@ documentation = "https://docs.rs/gity-daemon"
 homepage = "https://github.com/neul-labs/gity"
 repository = "https://github.com/neul-labs/gity"
 license = "MIT"
-keywords = ["git", "daemon", "fsmonitor", "watcher", "file-watcher", "git-operations", "background-service"]
+keywords = ["git", "daemon", "fsmonitor", "watcher", "background-service"]
 categories = ["development-tools", "filesystem"]
 
 [dependencies]

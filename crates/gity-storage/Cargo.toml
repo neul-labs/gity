@@ -8,7 +8,7 @@ documentation = "https://docs.rs/gity-storage"
 homepage = "https://github.com/neul-labs/gity"
 repository = "https://github.com/neul-labs/gity"
 license = "MIT"
-keywords = ["storage", "database", "sled", "embedded-database", "key-value", "persistent-storage"]
+keywords = ["storage", "database", "sled", "key-value", "embedded"]
 categories = ["database"]
 
 [dependencies]

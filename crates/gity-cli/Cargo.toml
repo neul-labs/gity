@@ -8,7 +8,7 @@ documentation = "https://docs.rs/gity-cli"
 homepage = "https://github.com/neul-labs/gity"
 repository = "https://github.com/neul-labs/gity"
 license = "MIT"
-keywords = ["git", "git-automation", "cli", "daemon", "command-line", "version-control"]
+keywords = ["git", "cli", "daemon", "command-line", "developer-tools"]
 categories = ["command-line-utilities"]
 
 [dependencies]

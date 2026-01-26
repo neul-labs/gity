@@ -8,7 +8,7 @@ documentation = "https://docs.rs/gity-tray"
 homepage = "https://github.com/neul-labs/gity"
 repository = "https://github.com/neul-labs/gity"
 license = "MIT"
-keywords = ["tray", "gui", "system-tray", "system-tray-icon", "menu-bar", "cross-platform-gui"]
+keywords = ["tray", "gui", "system-tray", "menu-bar", "cross-platform"]
 categories = ["gui"]
 
 [dependencies]

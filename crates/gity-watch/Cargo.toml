@@ -8,7 +8,7 @@ documentation = "https://docs.rs/gity-watch"
 homepage = "https://github.com/neul-labs/gity"
 repository = "https://github.com/neul-labs/gity"
 license = "MIT"
-keywords = ["watcher", "filesystem", "inotify", "fsevents", "file-watcher", "event-watcher", "cross-platform"]
+keywords = ["watcher", "filesystem", "inotify", "fsevents", "notify"]
 categories = ["filesystem"]
 
 [dependencies]

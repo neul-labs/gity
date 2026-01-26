@@ -8,7 +8,7 @@ documentation = "https://docs.rs/gity-ipc"
 homepage = "https://github.com/neul-labs/gity"
 repository = "https://github.com/neul-labs/gity"
 license = "MIT"
-keywords = ["ipc", "protocol", "messaging", "inter-process", "async-communication", "serialization"]
+keywords = ["ipc", "protocol", "messaging", "serialization", "async"]
 categories = ["development-tools"]
 
 [dependencies]
