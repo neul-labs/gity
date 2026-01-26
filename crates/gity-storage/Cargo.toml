@@ -1,9 +1,10 @@
 [package]
 name = "gity-storage"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 authors = ["Dipankar Sarkar <me@dipankar.name>", "Neul Labs <https://neul.uk>"]
 description = "Persistent storage layer for gity using sled"
+readme = "README.md"
 documentation = "https://docs.rs/gity-storage"
 homepage = "https://github.com/neul-labs/gity"
 repository = "https://github.com/neul-labs/gity"
@@ -12,7 +13,7 @@ keywords = ["storage", "database", "sled", "key-value", "embedded"]
 categories = ["database"]
 
 [dependencies]
-gity-ipc = { version = "0.1.1", path = "../gity-ipc" }
+gity-ipc = { version = "0.1.2", path = "../gity-ipc" }
 thiserror = "1.0"
 sled = "0.34"
 serde = { version = "1.0", features = ["derive"] }

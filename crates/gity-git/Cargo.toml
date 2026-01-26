@@ -1,9 +1,10 @@
 [package]
 name = "gity-git"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 authors = ["Dipankar Sarkar <me@dipankar.name>", "Neul Labs <https://neul.uk>"]
 description = "Git operations library for gity"
+readme = "README.md"
 documentation = "https://docs.rs/gity-git"
 homepage = "https://github.com/neul-labs/gity"
 repository = "https://github.com/neul-labs/gity"

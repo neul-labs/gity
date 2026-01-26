@@ -1,9 +1,10 @@
 [package]
 name = "gity-tray"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 authors = ["Dipankar Sarkar <me@dipankar.name>", "Neul Labs <https://neul.uk>"]
 description = "Cross-platform system tray UI for gity"
+readme = "README.md"
 documentation = "https://docs.rs/gity-tray"
 homepage = "https://github.com/neul-labs/gity"
 repository = "https://github.com/neul-labs/gity"
@@ -12,8 +13,8 @@ keywords = ["tray", "gui", "system-tray", "menu-bar", "cross-platform"]
 categories = ["gui"]
 
 [dependencies]
-gity-ipc = { version = "0.1.1", path = "../gity-ipc" }
-gity-daemon = { version = "0.1.1", path = "../gity-daemon" }
+gity-ipc = { version = "0.1.2", path = "../gity-ipc" }
+gity-daemon = { version = "0.1.2", path = "../gity-daemon" }
 
 tray-icon = "0.19"
 muda = "0.15"
