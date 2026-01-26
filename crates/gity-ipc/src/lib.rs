@@ -168,7 +168,7 @@ impl RepoSummary {
     }
 }
 
-/// Details about a repository used by `gitz status`.
+/// Details about a repository used by `gity status`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RepoStatusDetail {
     pub repo_path: PathBuf,

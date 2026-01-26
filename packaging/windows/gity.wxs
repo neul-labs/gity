@@ -1,22 +1,22 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
     <Product Id="*"
-             Name="Gitz"
+             Name="Gity"
              Language="1033"
              Version="0.1.0"
-             Manufacturer="Gitz Contributors"
+             Manufacturer="Gity Contributors"
              UpgradeCode="PUT-GUID-HERE">
 
         <Package InstallerVersion="500"
                  Compressed="yes"
                  InstallScope="perMachine"
-                 Description="Gitz - Fast Git Helper Daemon"
+                 Description="Gity - Fast Git Helper Daemon"
                  Comments="Accelerates Git operations for large repositories" />
 
-        <MajorUpgrade DowngradeErrorMessage="A newer version of Gitz is already installed." />
+        <MajorUpgrade DowngradeErrorMessage="A newer version of Gity is already installed." />
         <MediaTemplate EmbedCab="yes" />
 
-        <Feature Id="ProductFeature" Title="Gitz" Level="1">
+        <Feature Id="ProductFeature" Title="Gity" Level="1">
             <ComponentGroupRef Id="ProductComponents" />
             <ComponentRef Id="PathEnvVariable" />
         </Feature>
@@ -28,16 +28,16 @@
     <Fragment>
         <Directory Id="TARGETDIR" Name="SourceDir">
             <Directory Id="ProgramFiles64Folder">
-                <Directory Id="INSTALLFOLDER" Name="Gitz" />
+                <Directory Id="INSTALLFOLDER" Name="Gity" />
             </Directory>
         </Directory>
     </Fragment>
 
     <Fragment>
         <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
-            <Component Id="GitzExecutable" Guid="PUT-GUID-HERE">
-                <File Id="gitz.exe"
-                      Source="$(var.SourceDir)\gitz.exe"
+            <Component Id="GityExecutable" Guid="PUT-GUID-HERE">
+                <File Id="gity.exe"
+                      Source="$(var.SourceDir)\gity.exe"
                       KeyPath="yes" />
             </Component>
         </ComponentGroup>

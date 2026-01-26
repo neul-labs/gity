@@ -13,23 +13,23 @@ build_deb() {
     cargo build --release
 
     # Create package structure
-    PKG_DIR="packaging/debian/gitz_${VERSION}_amd64"
+    PKG_DIR="packaging/debian/gity_${VERSION}_amd64"
     mkdir -p "$PKG_DIR/DEBIAN"
     mkdir -p "$PKG_DIR/usr/bin"
-    mkdir -p "$PKG_DIR/usr/share/doc/gitz"
+    mkdir -p "$PKG_DIR/usr/share/doc/gity"
 
     # Copy files
-    cp target/release/gitz "$PKG_DIR/usr/bin/"
+    cp target/release/gity "$PKG_DIR/usr/bin/"
     cp packaging/debian/control "$PKG_DIR/DEBIAN/"
-    cp README.md "$PKG_DIR/usr/share/doc/gitz/"
+    cp README.md "$PKG_DIR/usr/share/doc/gity/"
 
     # Set permissions
-    chmod 755 "$PKG_DIR/usr/bin/gitz"
+    chmod 755 "$PKG_DIR/usr/bin/gity"
 
     # Build package
     dpkg-deb --build "$PKG_DIR"
 
-    echo "Built: packaging/debian/gitz_${VERSION}_amd64.deb"
+    echo "Built: packaging/debian/gity_${VERSION}_amd64.deb"
 }
 
 build_macos() {
@@ -40,25 +40,25 @@ build_macos() {
     cargo build --release
 
     # Create app bundle structure
-    APP_DIR="packaging/macos/Gitz.app"
+    APP_DIR="packaging/macos/Gity.app"
     mkdir -p "$APP_DIR/Contents/MacOS"
     mkdir -p "$APP_DIR/Contents/Resources"
 
     # Copy files
-    cp target/release/gitz "$APP_DIR/Contents/MacOS/"
+    cp target/release/gity "$APP_DIR/Contents/MacOS/"
     cp packaging/macos/Info.plist "$APP_DIR/Contents/"
 
     # Create DMG (requires create-dmg or hdiutil)
     if command -v create-dmg &> /dev/null; then
         create-dmg \
-            --volname "Gitz Installer" \
+            --volname "Gity Installer" \
             --window-pos 200 120 \
             --window-size 600 400 \
             --icon-size 100 \
             --app-drop-link 450 185 \
-            "packaging/macos/Gitz-${VERSION}.dmg" \
+            "packaging/macos/Gity-${VERSION}.dmg" \
             "$APP_DIR"
-        echo "Built: packaging/macos/Gitz-${VERSION}.dmg"
+        echo "Built: packaging/macos/Gity-${VERSION}.dmg"
     else
         echo "App bundle created at: $APP_DIR"
         echo "Install create-dmg to generate DMG file"
@@ -75,10 +75,10 @@ build_windows() {
     cargo build --release --target x86_64-pc-windows-msvc
 
     # WiX build commands (run on Windows)
-    # candle.exe -dSourceDir="target/x86_64-pc-windows-msvc/release" packaging/windows/gitz.wxs
-    # light.exe -ext WixUIExtension gitz.wixobj -o packaging/windows/gitz-${VERSION}.msi
+    # candle.exe -dSourceDir="target/x86_64-pc-windows-msvc/release" packaging/windows/gity.wxs
+    # light.exe -ext WixUIExtension gity.wixobj -o packaging/windows/gity-${VERSION}.msi
 
-    echo "See packaging/windows/gitz.wxs for WiX configuration"
+    echo "See packaging/windows/gity.wxs for WiX configuration"
 }
 
 case "$1" in

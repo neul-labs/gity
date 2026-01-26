@@ -1,4 +1,4 @@
-//! Cross-platform system tray for gitz daemon.
+//! Cross-platform system tray for gity daemon.
 //!
 //! Provides a minimal tray icon with Info and Exit actions.
 

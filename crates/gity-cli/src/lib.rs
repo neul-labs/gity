@@ -12,7 +12,7 @@ fn validated_path(path: PathBuf) -> Result<ValidatedPath, CliError> {
     ValidatedPath::new(path).map_err(|e| CliError::Message(e.to_string()))
 }
 
-/// CLI definition shared by the `gitz` binary and tests.
+/// CLI definition shared by the `gity` binary and tests.
 #[derive(Debug, Parser)]
 #[command(author, version, about = "Fast Git helper daemon")]
 pub struct Cli {

@@ -166,7 +166,7 @@ fn warn_if_problematic_filesystem(repo_path: &Path) {
             );
             eprintln!("   For best results, move the repository to the Linux filesystem:");
             eprintln!("     git clone <url> ~/code/repo");
-            eprintln!("     gitz register ~/code/repo");
+            eprintln!("     gity register ~/code/repo");
             eprintln!();
             eprintln!("   See: docs/fsmonitor.md#wsl2-windows-subsystem-for-linux");
             eprintln!();

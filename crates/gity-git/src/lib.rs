@@ -153,7 +153,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         Repository::init(dir.path()).expect("init repo");
         let configurator = RepoConfigurator::open(dir.path()).expect("open repo");
-        let helper_cmd = "gitz fsmonitor-helper";
+        let helper_cmd = "gity fsmonitor-helper";
         configurator
             .apply_performance_settings(Some(helper_cmd))
             .expect("apply settings");
@@ -180,7 +180,7 @@ mod tests {
         index.write().expect("write index");
         let tree_id = index.write_tree().expect("write tree");
         let tree = repo.find_tree(tree_id).expect("tree");
-        let sig = Signature::now("Gity", "gitz@example.com").expect("signature");
+        let sig = Signature::now("Gity", "gity@example.com").expect("signature");
         repo.commit(Some("HEAD"), &sig, &sig, "initial", &tree, &[])
             .expect("commit");
 

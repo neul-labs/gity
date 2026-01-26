@@ -1,4 +1,4 @@
-//! Integration tests for core gitz workflows with real Git repositories.
+//! Integration tests for core gity workflows with real Git repositories.
 //!
 //! These tests verify the end-to-end behavior of:
 //! - Repository registration and configuration
@@ -146,7 +146,7 @@ fn test_repo_configurator_applies_settings() {
 
     let configurator = RepoConfigurator::open(dir.path()).expect("open repo");
     configurator
-        .apply_performance_settings(Some("gitz fsmonitor-helper"))
+        .apply_performance_settings(Some("gity fsmonitor-helper"))
         .expect("apply settings");
 
     let config = fs::read_to_string(dir.path().join(".git/config")).expect("read config");
@@ -161,14 +161,14 @@ fn test_repo_configurator_clears_settings() {
 
     let configurator = RepoConfigurator::open(dir.path()).expect("open repo");
     configurator
-        .apply_performance_settings(Some("gitz fsmonitor-helper"))
+        .apply_performance_settings(Some("gity fsmonitor-helper"))
         .expect("apply settings");
     configurator
         .clear_performance_settings()
         .expect("clear settings");
 
     let config = fs::read_to_string(dir.path().join(".git/config")).expect("read config");
-    assert!(!config.contains("fsmonitor = gitz"));
+    assert!(!config.contains("fsmonitor = gity"));
 }
 
 // =============================================================================
@@ -836,7 +836,7 @@ fn test_git_config_fsmonitor_setting() {
     // Apply fsmonitor setting
     let configurator = RepoConfigurator::open(dir.path()).expect("open");
     configurator
-        .apply_performance_settings(Some("gitz fsmonitor-helper 2"))
+        .apply_performance_settings(Some("gity fsmonitor-helper 2"))
         .expect("apply");
 
     // Verify via git config command
@@ -848,7 +848,7 @@ fn test_git_config_fsmonitor_setting() {
 
     let value = String::from_utf8_lossy(&output.stdout);
     assert!(
-        value.contains("gitz fsmonitor-helper"),
+        value.contains("gity fsmonitor-helper"),
         "fsmonitor should be set: {}",
         value
     );
