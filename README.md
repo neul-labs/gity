@@ -4,9 +4,11 @@
 
 Gity is a lightweight, cross-platform daemon that accelerates Git operations on large repositories. A single binary runs on **Linux**, **macOS**, and **Windows**—watching your files, maintaining warm caches, and running background maintenance so `git status` stays fast even in repos with millions of files.
 
-[![Cross-platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-blue)]()
-[![Rust](https://img.shields.io/badge/rust-1.75%2B-orange)]()
-[![License: MIT](https://img.shields.io/badge/license-MIT-green)]()
+[![Crates.io](https://img.shields.io/crates/v/gity)](https://crates.io/crates/gity)
+[![Documentation](https://img.shields.io/badge/docs-neullabs.com-blue)](http://docs.neullabs.com/gity)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](https://github.com/neul-labs/gity/blob/main/LICENSE)
+[![Cross-platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-blue)](http://docs.neullabs.com/gity)
+[![Rust](https://img.shields.io/badge/rust-1.75%2B-orange)](https://www.rust-lang.org/)
 
 ## Cross-Platform Support
 
