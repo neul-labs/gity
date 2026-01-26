@@ -1,6 +1,6 @@
 [package]
 name = "gity-daemon"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["Dipankar Sarkar <me@dipankar.name>", "Neul Labs <https://neul.uk>"]
 description = "Background daemon for gity - handles file watching, caching, and Git maintenance"
@@ -14,10 +14,10 @@ categories = ["development-tools", "filesystem"]
 [dependencies]
 async-nng = "0.2"
 async-trait = "0.1"
-gity-ipc = { version = "0.1.0", path = "../gity-ipc" }
-gity-git = { version = "0.1.0", path = "../gity-git" }
-gity-storage = { version = "0.1.0", path = "../gity-storage" }
-gity-watch = { version = "0.1.0", path = "../gity-watch" }
+gity-ipc = { version = "0.1.1", path = "../gity-ipc" }
+gity-git = { version = "0.1.1", path = "../gity-git" }
+gity-storage = { version = "0.1.1", path = "../gity-storage" }
+gity-watch = { version = "0.1.1", path = "../gity-watch" }
 nng = "1.0"
 tokio = { version = "1.37", features = ["macros", "process", "rt", "signal", "sync", "time"] }
 thiserror = "1.0"

@@ -1,6 +1,6 @@
 [package]
 name = "gity-ipc"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["Dipankar Sarkar <me@dipankar.name>", "Neul Labs <https://neul.uk>"]
 description = "IPC protocol and message types for gity daemon communication"

@@ -3,7 +3,7 @@
     <Product Id="*"
              Name="Gity"
              Language="1033"
-             Version="0.1.0"
+             Version="0.1.1"
              Manufacturer="Gity Contributors"
              UpgradeCode="PUT-GUID-HERE">
 

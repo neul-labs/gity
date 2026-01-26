@@ -1,6 +1,6 @@
 [package]
 name = "gity-git"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["Dipankar Sarkar <me@dipankar.name>", "Neul Labs <https://neul.uk>"]
 description = "Git operations library for gity"

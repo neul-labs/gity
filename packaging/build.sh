@@ -2,7 +2,7 @@
 # Build script for platform packages
 set -e
 
-VERSION="0.1.0"
+VERSION="0.1.1"
 PROJECT_ROOT="$(dirname "$0")/.."
 
 build_deb() {

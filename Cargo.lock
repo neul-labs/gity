@@ -1237,7 +1237,7 @@ dependencies = [
 
 [[package]]
 name = "gity"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "clap",
  "dirs 5.0.1",
@@ -1261,7 +1261,7 @@ dependencies = [
 
 [[package]]
 name = "gity-cli"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "clap",
@@ -1272,7 +1272,7 @@ dependencies = [
 
 [[package]]
 name = "gity-daemon"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-nng",
  "async-trait",
@@ -1298,7 +1298,7 @@ dependencies = [
 
 [[package]]
 name = "gity-git"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "git2",
  "tempfile",
@@ -1307,7 +1307,7 @@ dependencies = [
 
 [[package]]
 name = "gity-ipc"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "bincode",
@@ -1318,7 +1318,7 @@ dependencies = [
 
 [[package]]
 name = "gity-storage"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "bincode",
  "gity-ipc",
@@ -1331,7 +1331,7 @@ dependencies = [
 
 [[package]]
 name = "gity-tray"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "gity-daemon",
  "gity-ipc",
@@ -1347,7 +1347,7 @@ dependencies = [
 
 [[package]]
 name = "gity-watch"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "notify",
