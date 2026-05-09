@@ -16,63 +16,107 @@ git --version
 
 ## Installation Methods
 
-=== "From Source (Recommended)"
+=== "cargo (Recommended)"
 
     If you have Rust installed:
 
     ```bash
-    cargo install --path crates/gity
+    cargo install gity
     ```
 
-    Or clone and build:
+    With system tray support:
 
     ```bash
-    git clone https://github.com/yourusername/gity
+    cargo install gity --features tray
+    ```
+
+    Or clone and build from source:
+
+    ```bash
+    git clone https://github.com/neul-labs/gity.git
     cd gity
     cargo build --release
     # Binary is at ./target/release/gity
+    ```
+
+=== "Homebrew (macOS & Linux)"
+
+    ```bash
+    brew tap neul-labs/tap
+    brew install gity
+    ```
+
+=== "npm"
+
+    ```bash
+    npm install -g gity-cli
+    ```
+
+    Or use npx without installing:
+
+    ```bash
+    npx gity-cli register /path/to/repo
+    ```
+
+=== "pip"
+
+    ```bash
+    pip install gity
+    ```
+
+    Or with uv:
+
+    ```bash
+    uv tool install gity
     ```
 
 === "Linux"
 
     **Debian/Ubuntu (.deb)**
 
+    Download from [GitHub Releases](https://github.com/neul-labs/gity/releases):
+
     ```bash
-    # Download from releases
-    wget https://github.com/yourusername/gity/releases/latest/download/gity_amd64.deb
-    sudo dpkg -i gity_amd64.deb
+    wget https://github.com/neul-labs/gity/releases/latest/download/gity-<version>-x86_64-unknown-linux-gnu.tar.gz
+    tar -xzf gity-<version>-x86_64-unknown-linux-gnu.tar.gz
+    sudo cp gity /usr/local/bin/
     ```
 
-    **AppImage**
+    **Snap**
 
     ```bash
-    wget https://github.com/yourusername/gity/releases/latest/download/gity-x86_64.AppImage
-    chmod +x gity-x86_64.AppImage
-    ./gity-x86_64.AppImage
+    snap install gity
     ```
 
 === "macOS"
 
-    **Homebrew** (coming soon)
+    **Homebrew** (recommended)
 
     ```bash
+    brew tap neul-labs/tap
     brew install gity
     ```
 
     **Package Installer**
 
-    Download the `.pkg` installer from [releases](https://github.com/yourusername/gity/releases).
+    Download the `.pkg` installer from [GitHub Releases](https://github.com/neul-labs/gity/releases).
 
 === "Windows"
 
     **MSI Installer**
 
-    Download the MSI installer from [releases](https://github.com/yourusername/gity/releases).
+    Download the MSI installer from [GitHub Releases](https://github.com/neul-labs/gity/releases).
 
-    **Scoop** (coming soon)
+    **Chocolatey**
 
     ```powershell
-    scoop install gity
+    choco install gity
+    ```
+
+    **npm**
+
+    ```powershell
+    npm install -g gity-cli
     ```
 
 ## Verify Installation
@@ -83,22 +127,62 @@ After installation, verify Gity is working:
 gity --version
 ```
 
+## Supply Chain Security
+
+All release artifacts are built and published via GitHub Actions with **OIDC-based trusted publishing** and **signed attestations**:
+
+- **crates.io** — [Trusted Publishing](https://crates.io/docs/trusted-publishing) (OIDC)
+- **PyPI** — [Trusted Publishing](https://docs.pypi.org/trusted-publishers/) (OIDC)
+- **npm** — [Trusted Publishing](https://docs.npmjs.com/generating-provenance-statements) with automatic provenance
+- **GitHub Releases** — Attested with `actions/attest-build-provenance`
+
+Verify a release binary:
+
+```bash
+gh attestation verify gity-0.1.2-x86_64-unknown-linux-gnu.tar.gz --owner neul-labs
+```
+
 ## Next Steps
 
 Once installed, head to the [Quick Start](quick-start.md) guide to accelerate your first repository.
 
 ## Uninstallation
 
-=== "From Source"
+=== "cargo"
 
     ```bash
     cargo uninstall gity
+    ```
+
+=== "Homebrew"
+
+    ```bash
+    brew uninstall gity
+    brew untap neul-labs/tap
+    ```
+
+=== "npm"
+
+    ```bash
+    npm uninstall -g gity-cli
+    ```
+
+=== "pip"
+
+    ```bash
+    pip uninstall gity
     ```
 
 === "Linux (.deb)"
 
     ```bash
     sudo dpkg -r gity
+    ```
+
+=== "Snap"
+
+    ```bash
+    snap remove gity
     ```
 
 === "macOS"

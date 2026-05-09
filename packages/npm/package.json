@@ -1,26 +1,29 @@
 {
   "name": "gity-cli",
-  "version": "0.1.0",
-  "description": "Make large Git repositories feel instant - a lightweight daemon that accelerates Git operations",
+  "version": "0.1.2",
+  "description": "Make large Git repositories feel instant — a lightweight cross-platform daemon that accelerates git status and maintenance via fsmonitor and file watching",
   "main": "lib/cli.js",
   "bin": {
-    "gity": "./lib/cli.js"
+    "gity": "lib/cli.js"
   },
   "scripts": {
     "install": "node lib/install.js"
   },
   "keywords": [
     "git",
-    "git-automation",
+    "git-acceleration",
     "git-performance",
     "fsmonitor",
     "version-control",
     "developer-tools",
     "cli",
     "daemon",
-    "prefetch",
     "git-status",
-    "repo-management"
+    "monorepo",
+    "repo-management",
+    "file-watcher",
+    "background-service",
+    "git-maintenance"
   ],
   "author": "Dipankar Sarkar <me@dipankar.name>",
   "contributors": [
@@ -32,9 +35,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/neul-labs/gity.git"
+    "url": "git+https://github.com/neul-labs/gity.git"
   },
   "homepage": "https://github.com/neul-labs/gity",
+  "bugs": {
+    "url": "https://github.com/neul-labs/gity/issues"
+  },
   "engines": {
     "node": ">=14.0.0"
   },

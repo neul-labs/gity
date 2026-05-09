@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-05-10
+
 ### Added
 
 - **Demo TUI Mode**: Conference-ready visual demo with ratatui
@@ -22,9 +24,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Adaptive poll interval (50ms active, 250ms idle, 500ms very idle)
   - Memory-mapped fsmonitor cache for zero-copy responses
 
+- **CI/CD & Supply Chain Security**:
+  - OIDC-based Trusted Publishing for crates.io via `rust-lang/crates-io-auth-action`
+  - OIDC-based Trusted Publishing for PyPI via `pypa/gh-action-pypi-publish`
+  - OIDC-based Trusted Publishing for npm with automatic provenance attestations
+  - GitHub artifact attestations for all release binaries via `actions/attest-build-provenance`
+  - Consolidated CI workflow with lint, test, audit, and auto-tagging
+
+- **Documentation & SEO**:
+  - SEO-optimized READMEs for all workspace crates
+  - SEO-optimized PyPI and npm package READMEs with install instructions
+  - Updated package metadata (keywords, classifiers, descriptions)
+  - Supply chain security section in README and docs
+
 ### Changed
 
 - Demo now defaults to TUI mode; use `--classic` flag for text-based output
+- Release workflow now publishes workspace crates in strict dependency order
+- npm publishing now uses Node.js 24+ with native OIDC support
 
 ## [0.1.0] - 2024-12-09
 
@@ -42,5 +59,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - IPC communication between CLI and daemon
 - Persistent storage with sled database
 
-[Unreleased]: https://github.com/neul-labs/gity/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/neul-labs/gity/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/neul-labs/gity/releases/tag/v0.1.2
 [0.1.0]: https://github.com/neul-labs/gity/releases/tag/v0.1.0

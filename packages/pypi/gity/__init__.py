@@ -1,6 +1,6 @@
 """Gity - Make large Git repositories feel instant."""
 
-__version__ = "0.1.0"
+__version__ = "0.1.2"
 
 import sys
 import platform

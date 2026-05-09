@@ -9,6 +9,11 @@ env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
 
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
 jobs:
   check-trigger:
     name: Check Release Trigger
@@ -104,24 +109,45 @@ jobs:
         shell: bash
         run: |
           mkdir "gity-${{ steps.version.outputs.VERSION }}-${{ matrix.target }}"
+          cp README.md LICENSE "gity-${{ steps.version.outputs.VERSION }}-${{ matrix.target }}/" 2>/dev/null || true
           if [[ "${{ matrix.target }}" == *windows* ]]; then
             cp "target/${{ matrix.target }}/release/gity.exe" "gity-${{ steps.version.outputs.VERSION }}-${{ matrix.target }}/"
             cd "gity-${{ steps.version.outputs.VERSION }}-${{ matrix.target }}"
             7z a "../gity-${{ steps.version.outputs.VERSION }}-${{ matrix.target }}.zip" .
+            echo "archive=gity-${{ steps.version.outputs.VERSION }}-${{ matrix.target }}.zip" >> "$GITHUB_OUTPUT"
           else
             cp "target/${{ matrix.target }}/release/gity" "gity-${{ steps.version.outputs.VERSION }}-${{ matrix.target }}/"
             tar -czvf "gity-${{ steps.version.outputs.VERSION }}-${{ matrix.target }}.tar.gz" -C "gity-${{ steps.version.outputs.VERSION }}-${{ matrix.target }}" .
+            echo "archive=gity-${{ steps.version.outputs.VERSION }}-${{ matrix.target }}.tar.gz" >> "$GITHUB_OUTPUT"
           fi
+        id: package
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: gity-${{ matrix.target }}
           path: "gity-${{ steps.version.outputs.VERSION }}-${{ matrix.target }}.*"
+          if-no-files-found: error
+
+  attest:
+    name: Attest Build Provenance
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: gity-*
+
+      - name: Attest release artifacts
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: 'artifacts/**/*'
 
   create-github-release:
     name: Create GitHub Release
-    needs: build
+    needs: [build, attest]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -130,6 +156,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
+          pattern: gity-*
 
       - name: Get version
         id: version
@@ -146,8 +173,8 @@ jobs:
       - name: Create Checksums
         run: |
           cd "gity-${{ steps.version.outputs.VERSION }}"
-          sha256sum * > "gity-${{ steps.version.outputs.VERSION }}-checksums.txt"
-          cat "gity-${{ steps.version.outputs.VERSION }}-checksums.txt"
+          sha256sum * > "SHA256SUMS.txt"
+          cat "SHA256SUMS.txt"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -159,31 +186,57 @@ jobs:
           files: |
             gity-${{ steps.version.outputs.VERSION }}/*
           generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   publish-cargo:
     name: Publish to crates.io
     needs: create-github-release
     runs-on: ubuntu-latest
+    environment: cargo
     steps:
       - uses: actions/checkout@v4
 
-      - name: Get version
-        id: version
-        run: |
-          VERSION=$(grep -m1 '^version = ' crates/gity/Cargo.toml | sed 's/version = "\(.*\)"/\1/')
-          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
 
-      - name: Publish to crates.io
-        run: cargo publish
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libappindicator3-dev libxdo-dev
+
+      - name: Authenticate with crates.io (OIDC)
+        uses: rust-lang/crates-io-auth-action@v1
+        id: auth
+
+      - name: Publish gity-ipc
+        run: cargo publish -p gity-ipc --token ${{ steps.auth.outputs.token }}
+
+      - name: Publish gity-git
+        run: cargo publish -p gity-git --token ${{ steps.auth.outputs.token }}
+
+      - name: Publish gity-watch
+        run: cargo publish -p gity-watch --token ${{ steps.auth.outputs.token }}
+
+      - name: Publish gity-storage
+        run: cargo publish -p gity-storage --token ${{ steps.auth.outputs.token }}
+
+      - name: Publish gity-daemon
+        run: cargo publish -p gity-daemon --token ${{ steps.auth.outputs.token }}
+
+      - name: Publish gity-cli
+        run: cargo publish -p gity-cli --token ${{ steps.auth.outputs.token }}
+
+      - name: Publish gity
+        run: cargo publish -p gity --token ${{ steps.auth.outputs.token }}
 
   publish-pypi:
     name: Publish to PyPI
-    needs: publish-cargo
+    needs: create-github-release
     runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/gity/
+    permissions:
+      id-token: write
     steps:
       - uses: actions/checkout@v4
 
@@ -205,8 +258,8 @@ jobs:
         run: |
           mkdir -p pypi-package
           cp packages/pypi/* pypi-package/
-          cp -r crates/gity/README.md pypi-package/
-          cp -r crates/gity/LICENSE pypi-package/ 2>/dev/null || cp LICENSE pypi-package/ 2>/dev/null || true
+          cp packages/pypi/README.md pypi-package/ 2>/dev/null || true
+          cp LICENSE pypi-package/ 2>/dev/null || true
           sed -i "s/version = \".*\"/version = \"${{ steps.version.outputs.VERSION }}\"/" pypi-package/pyproject.toml
           cd pypi-package
           ls -la
@@ -219,12 +272,15 @@ jobs:
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          password: ${{ secrets.PYPI_TOKEN }}
+          packages-dir: pypi-package/dist/
 
   publish-npm:
     name: Publish to NPM
     needs: create-github-release
     runs-on: ubuntu-latest
+    environment:
+      name: npm
+      url: https://www.npmjs.com/package/gity-cli
     steps:
       - uses: actions/checkout@v4
 
@@ -238,6 +294,7 @@ jobs:
         run: |
           mkdir -p npm-package/binaries
           cp packages/npm/* npm-package/ 2>/dev/null || true
+          cp packages/npm/README.md npm-package/ 2>/dev/null || true
 
       - name: Download Linux x86_64 artifact
         uses: actions/download-artifact@v4
@@ -269,11 +326,14 @@ jobs:
           sed -i "s/\"version\": \".*\"/\"version\": \"${{ steps.version.outputs.VERSION }}\"/" package.json
           cat package.json
 
-      - name: Publish to NPM
-        uses: JS-DevTools/npm-publish@v3
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
-          token: ${{ secrets.NPM_TOKEN }}
-          package: npm-package/
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Publish to NPM (OIDC)
+        run: cd npm-package && npm publish --provenance --access public
 
   publish-deb:
     name: Create DEB Package

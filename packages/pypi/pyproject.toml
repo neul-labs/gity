@@ -4,33 +4,39 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "gity"
-version = "0.1.0"
-description = "Make large Git repositories feel instant - a lightweight daemon that accelerates Git operations"
+version = "0.1.2"
+description = "Make large Git repositories feel instant — a lightweight cross-platform daemon that accelerates git status and maintenance via fsmonitor and file watching"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.8"
 classifiers = [
-    "Operating System :: POSIX :: Linux",
-    "Operating System :: MacOS :: MacOS X",
-    "Operating System :: Microsoft :: Windows",
-    "Programming Language :: Rust",
     "Development Status :: 4 - Beta",
     "Environment :: Console",
     "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS :: MacOS X",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Rust",
     "Topic :: Software Development :: Version Control :: Git",
+    "Topic :: Utilities",
 ]
 keywords = [
     "git",
-    "git-automation",
+    "git-acceleration",
     "git-performance",
     "fsmonitor",
     "version-control",
     "developer-tools",
     "cli",
     "daemon",
-    "prefetch",
     "git-status",
-    "repo-management"
+    "monorepo",
+    "repo-management",
+    "file-watcher",
+    "background-service",
+    "git-maintenance"
 ]
 authors = [
     {name = "Dipankar Sarkar", email = "me@dipankar.name"},
@@ -40,6 +46,7 @@ authors = [
 [project.urls]
 Homepage = "https://github.com/neul-labs/gity"
 Repository = "https://github.com/neul-labs/gity"
+Documentation = "http://docs.neullabs.com/gity"
 Changelog = "https://github.com/neul-labs/gity/releases"
 Issues = "https://github.com/neul-labs/gity/issues"
 

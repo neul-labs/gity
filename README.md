@@ -5,6 +5,8 @@
 Gity is a lightweight, cross-platform daemon that accelerates Git operations on large repositories. A single binary runs on **Linux**, **macOS**, and **Windows**—watching your files, maintaining warm caches, and running background maintenance so `git status` stays fast even in repos with millions of files.
 
 [![Crates.io](https://img.shields.io/crates/v/gity)](https://crates.io/crates/gity)
+[![npm](https://img.shields.io/npm/v/gity-cli)](https://www.npmjs.com/package/gity-cli)
+[![PyPI](https://img.shields.io/pypi/v/gity)](https://pypi.org/project/gity/)
 [![Documentation](https://img.shields.io/badge/docs-neullabs.com-blue)](http://docs.neullabs.com/gity)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](https://github.com/neul-labs/gity/blob/main/LICENSE)
 [![Cross-platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-blue)](http://docs.neullabs.com/gity)
@@ -48,7 +50,7 @@ The result: `git status` in milliseconds instead of seconds.
 
 ```bash
 # Install
-cargo install --path crates/gity
+cargo install gity
 
 # Register your large repo (one-time setup)
 gity register /path/to/large-repo
@@ -65,6 +67,68 @@ gity daemon start   # Start in background
 gity daemon stop    # Stop gracefully
 gity list           # See registered repos
 gity health <repo>  # Check repo health
+```
+
+## Installation
+
+### From Source (Rust)
+
+```bash
+cargo install gity
+```
+
+With system tray support:
+
+```bash
+cargo install gity --features tray
+```
+
+### Via Homebrew (macOS & Linux)
+
+```bash
+brew tap neul-labs/tap
+brew install gity
+```
+
+### Via npm
+
+```bash
+npm install -g gity-cli
+```
+
+Or with npx:
+
+```bash
+npx gity-cli register /path/to/large-repo
+```
+
+### Via pip
+
+```bash
+pip install gity
+```
+
+### Platform Packages
+
+- **Linux**: `.deb` package (see [releases](../../releases))
+- **macOS**: `.pkg` installer (see [releases](../../releases))
+- **Windows**: MSI installer (see [releases](../../releases))
+- **Snap**: `snap install gity`
+- **Chocolatey**: `choco install gity`
+
+## Supply Chain Security
+
+All release artifacts are built and published via GitHub Actions with **OIDC-based trusted publishing** (no long-lived secrets) and **signed attestations**:
+
+- **crates.io** — Published via [Trusted Publishing](https://crates.io/docs/trusted-publishing) (OIDC)
+- **PyPI** — Published via [Trusted Publishing](https://docs.pypi.org/trusted-publishers/) (OIDC)
+- **npm** — Published via [Trusted Publishing](https://docs.npmjs.com/generating-provenance-statements) with automatic provenance attestations
+- **GitHub Releases** — Binaries are attested with `actions/attest-build-provenance`
+
+Verify a release binary:
+
+```bash
+gh attestation verify gity-0.1.2-x86_64-unknown-linux-gnu.tar.gz --owner neul-labs
 ```
 
 ## Use Cases
@@ -166,20 +230,6 @@ See [docs/commands.md](docs/commands.md) for complete reference.
 - Rust 1.75+ (to build from source)
 - Linux, macOS, or Windows
 
-## Installation
-
-### From Source
-
-```bash
-cargo install --path crates/gity
-```
-
-### Platform Packages
-
-- **Linux**: `.deb` package or AppImage (see [releases](../../releases))
-- **macOS**: `.pkg` installer (see [releases](../../releases))
-- **Windows**: MSI installer (see [releases](../../releases))
-
 ## Configuration
 
 Gity stores data in `$GITY_HOME` (defaults to `~/.gity` on Unix, `%APPDATA%\Gity` on Windows):
@@ -209,6 +259,7 @@ Environment variables:
 | [commands.md](docs/commands.md) | Complete CLI reference |
 | [alternatives.md](docs/alternatives.md) | Comparison with other approaches |
 | [process.md](docs/process.md) | Contributing guidelines |
+| [release-requirements.md](docs/release-requirements.md) | Release process and OIDC setup |
 
 ## Troubleshooting
 

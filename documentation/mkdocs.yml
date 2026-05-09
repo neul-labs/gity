@@ -1,7 +1,7 @@
 site_name: Gity Documentation
 site_description: Make large Git repositories feel instant
 site_url: https://gity.dev/docs
-repo_url: https://github.com/yourusername/gity
+repo_url: https://github.com/neul-labs/gity
 repo_name: gity
 
 theme:
