@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "gity"
+name = "gity-cli"
 version = "0.1.2"
 description = "Make large Git repositories feel instant — a lightweight cross-platform daemon that accelerates git status and maintenance via fsmonitor and file watching"
 readme = "README.md"

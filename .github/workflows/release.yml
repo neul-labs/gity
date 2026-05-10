@@ -244,7 +244,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: pypi
-      url: https://pypi.org/project/gity/
+      url: https://pypi.org/project/gity-cli/
     permissions:
       id-token: write
     steps:

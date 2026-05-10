@@ -1,0 +1,8 @@
+README.md
+pyproject.toml
+gity/__init__.py
+gity_cli.egg-info/PKG-INFO
+gity_cli.egg-info/SOURCES.txt
+gity_cli.egg-info/dependency_links.txt
+gity_cli.egg-info/entry_points.txt
+gity_cli.egg-info/top_level.txt

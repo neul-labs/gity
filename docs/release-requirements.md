@@ -69,7 +69,7 @@ The `release.yml` `publish-cargo` job uses `rust-lang/crates-io-auth-action@v1` 
 
 ### PyPI (Trusted Publishing — no long-lived token)
 
-1. Go to https://pypi.org/manage/project/gity/settings/publishing/
+1. Go to https://pypi.org/manage/project/gity-cli/settings/publishing/
 2. Click **Add a new pending publisher**
 3. Fill in:
    - **Publisher**: GitHub Actions
@@ -179,7 +179,7 @@ Before first release, verify:
 - [ ] Homebrew tap repository created at `neul-labs/homebrew-tap`
 - [ ] Snap name registered
 - [ ] NPM package name verified (`gity-cli`) and initial version published
-- [ ] PyPI package name verified (`gity`)
+- [ ] PyPI package name verified (`gity-cli`)
 - [ ] Chocolatey package prepared
 - [ ] All crate READMEs are SEO-optimized
 - [ ] `CHANGELOG.md` updated for the new version

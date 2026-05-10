@@ -61,13 +61,13 @@ git --version
 === "pip"
 
     ```bash
-    pip install gity
+    pip install gity-cli
     ```
 
     Or with uv:
 
     ```bash
-    uv tool install gity
+    uv tool install gity-cli
     ```
 
 === "Linux"

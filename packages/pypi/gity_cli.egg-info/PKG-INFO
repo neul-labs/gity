@@ -1,3 +1,29 @@
+Metadata-Version: 2.4
+Name: gity-cli
+Version: 0.1.2
+Summary: Make large Git repositories feel instant — a lightweight cross-platform daemon that accelerates git status and maintenance via fsmonitor and file watching
+Author-email: Dipankar Sarkar <me@dipankar.name>, Neul Labs <hello@neul.uk>
+License: MIT
+Project-URL: Homepage, https://github.com/neul-labs/gity
+Project-URL: Repository, https://github.com/neul-labs/gity
+Project-URL: Documentation, http://docs.neullabs.com/gity
+Project-URL: Changelog, https://github.com/neul-labs/gity/releases
+Project-URL: Issues, https://github.com/neul-labs/gity/issues
+Keywords: git,git-acceleration,git-performance,fsmonitor,version-control,developer-tools,cli,daemon,git-status,monorepo,repo-management,file-watcher,background-service,git-maintenance
+Classifier: Development Status :: 4 - Beta
+Classifier: Environment :: Console
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: POSIX :: Linux
+Classifier: Operating System :: MacOS :: MacOS X
+Classifier: Operating System :: Microsoft :: Windows
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Rust
+Classifier: Topic :: Software Development :: Version Control :: Git
+Classifier: Topic :: Utilities
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+
 # gity-cli
 
 **Make large Git repositories feel instant — install via pip.**

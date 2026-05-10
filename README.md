@@ -6,7 +6,7 @@ Gity is a lightweight, cross-platform daemon that accelerates Git operations on 
 
 [![Crates.io](https://img.shields.io/crates/v/gity)](https://crates.io/crates/gity)
 [![npm](https://img.shields.io/npm/v/gity-cli)](https://www.npmjs.com/package/gity-cli)
-[![PyPI](https://img.shields.io/pypi/v/gity)](https://pypi.org/project/gity/)
+[![PyPI](https://img.shields.io/pypi/v/gity-cli)](https://pypi.org/project/gity-cli/)
 [![Documentation](https://img.shields.io/badge/docs-neullabs.com-blue)](http://docs.neullabs.com/gity)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](https://github.com/neul-labs/gity/blob/main/LICENSE)
 [![Cross-platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-blue)](http://docs.neullabs.com/gity)

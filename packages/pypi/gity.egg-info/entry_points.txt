@@ -1,0 +1,2 @@
+[console_scripts]
+gity = gity.cli:main
