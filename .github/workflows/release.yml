@@ -186,13 +186,80 @@ jobs:
           sha256sum * > "SHA256SUMS.txt"
           cat "SHA256SUMS.txt"
 
+      - name: Build release notes
+        id: notes
+        run: |
+          VERSION=${{ steps.version.outputs.VERSION }}
+          cat > release_notes.md <<EOF
+          ## Gity v${VERSION}
+
+          **Make large Git repositories feel instant.**
+
+          ### Installation
+
+          **cargo**
+          \`\`\`bash
+cargo install gity
+\`\`\`
+
+          **Homebrew**
+          \`\`\`bash
+brew tap neul-labs/tap
+brew install gity
+\`\`\`
+
+          **npm**
+          \`\`\`bash
+npm install -g gity-cli
+\`\`\`
+
+          **pip**
+          \`\`\`bash
+pip install gity-cli
+\`\`\`
+
+          **GitHub Releases (binary)**
+          Download pre-built binaries for Linux, macOS, and Windows from the assets below.
+
+          ### Platforms
+
+          | Platform | Architecture | Artifact |
+          |----------|--------------|----------|
+          | Linux    | x86_64       | \`.tar.gz\` |
+          | Linux    | aarch64      | \`.tar.gz\` |
+          | macOS    | x86_64       | \`.tar.gz\` |
+          | macOS    | aarch64      | \`.tar.gz\` |
+          | Windows  | x86_64       | \`.zip\`   |
+
+          ### Supply Chain Security
+
+          - **crates.io** — Published via [Trusted Publishing](https://crates.io/docs/trusted-publishing) (OIDC)
+          - **PyPI** — Published via [Trusted Publishing](https://docs.pypi.org/trusted-publishers/) (OIDC)
+          - **npm** — Published via [Trusted Publishing](https://docs.npmjs.com/generating-provenance-statements) with automatic provenance attestations
+          - **GitHub Releases** — Binaries are attested with \`actions/attest-build-provenance\`
+
+          Verify a release binary:
+          \`\`\`bash
+gh attestation verify gity-${VERSION}-x86_64-unknown-linux-gnu.tar.gz --owner neul-labs
+\`\`\`
+
+          ### Quick Start
+
+          \`\`\`bash
+gity register /path/to/large-repo
+cd /path/to/large-repo
+git status  # Fast!
+\`\`\`
+
+          See [CHANGELOG](https://github.com/neul-labs/gity/blob/main/CHANGELOG.md) for full details.
+          EOF
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.version.outputs.VERSION }}
           name: Gity v${{ steps.version.outputs.VERSION }}
-          body: |
-            See [CHANGELOG](https://github.com/neul-labs/gity/blob/main/CHANGELOG.md) for details.
+          body_path: ${{ github.workspace }}/release_notes.md
           files: |
             gity-${{ steps.version.outputs.VERSION }}/*
           generate_release_notes: true
