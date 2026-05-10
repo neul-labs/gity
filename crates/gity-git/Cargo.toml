@@ -13,7 +13,7 @@ keywords = ["git", "libgit2", "git-library", "version-control", "git-operations"
 categories = ["development-tools"]
 
 [dependencies]
-git2 = { version = "0.19", features = ["vendored-libgit2"] }
+git2 = { version = "0.19", features = ["vendored-libgit2", "vendored-openssl"] }
 thiserror = "1.0"
 
 [dev-dependencies]
