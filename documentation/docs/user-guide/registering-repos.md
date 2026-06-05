@@ -49,13 +49,12 @@ These are automatically removed when you unregister.
 gity list
 ```
 
-Output:
+Output (one repo per line, with queue depth, status, and watcher generation):
 
 ```
-Registered repositories:
-  /home/user/projects/frontend
-  /home/user/projects/backend
-  /home/user/work/monorepo
+/home/user/projects/frontend [0 jobs, status idle, gen 12]
+/home/user/projects/backend  [1 jobs, status busy, gen 47]
+/home/user/work/monorepo     [0 jobs, status idle, gen 5]
 ```
 
 ### With Statistics
@@ -64,17 +63,7 @@ Registered repositories:
 gity list --stats
 ```
 
-Output:
-
-```
-Registered repositories:
-  /home/user/projects/frontend
-    CPU: 0.1%  RSS: 12MB  Cache: 5MB  Jobs: 0
-  /home/user/projects/backend
-    CPU: 0.2%  RSS: 15MB  Cache: 8MB  Jobs: 1
-  /home/user/work/monorepo
-    CPU: 0.5%  RSS: 45MB  Cache: 25MB  Jobs: 0
-```
+`--stats` augments each repo line with daemon-side resource numbers (CPU %, RSS, cache size, queued jobs). The exact column layout is driven by the daemon's metrics output — see `gity daemon metrics` for the underlying data.
 
 ## Worktrees
 

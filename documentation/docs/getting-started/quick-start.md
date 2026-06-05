@@ -43,12 +43,10 @@ gity list
 Output:
 
 ```
-Registered repositories:
-  /path/to/your/large-repo
-    Status: healthy
-    Watcher: active
-    Cache: warm
+/path/to/your/large-repo [0 jobs, status idle, gen 1]
 ```
+
+Each entry shows the repo path, queued job count, current status, and the latest watcher generation.
 
 For detailed diagnostics:
 

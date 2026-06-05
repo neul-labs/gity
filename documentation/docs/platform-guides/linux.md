@@ -55,17 +55,21 @@ cargo install --path crates/gity
 
 ### Debian/Ubuntu (.deb)
 
+A `.deb` is published with each release. Grab the latest from the [Releases](https://github.com/neul-labs/gity/releases) page and install with `dpkg`:
+
 ```bash
-wget https://github.com/yourusername/gity/releases/latest/download/gity_amd64.deb
-sudo dpkg -i gity_amd64.deb
+sudo dpkg -i gity_<version>_amd64.deb
 ```
 
-### AppImage
+### Tarball (x86_64 / aarch64)
+
+Linux release builds are distributed as `.tar.gz` archives:
 
 ```bash
-wget https://github.com/yourusername/gity/releases/latest/download/gity-x86_64.AppImage
-chmod +x gity-x86_64.AppImage
-./gity-x86_64.AppImage
+curl -L -o gity.tar.gz \
+  https://github.com/neul-labs/gity/releases/latest/download/gity-<version>-x86_64-unknown-linux-gnu.tar.gz
+tar -xzf gity.tar.gz
+sudo install -m 0755 gity /usr/local/bin/gity
 ```
 
 ## System Service

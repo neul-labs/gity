@@ -317,7 +317,7 @@ git config --list --show-origin | grep -E "(fsmonitor|untracked)"
 
 ### Report an Issue
 
-Open an issue at [github.com/yourusername/gity/issues](https://github.com/yourusername/gity/issues) with:
+Open an issue at [github.com/neul-labs/gity/issues](https://github.com/neul-labs/gity/issues) with:
 
 1. Description of the problem
 2. Steps to reproduce

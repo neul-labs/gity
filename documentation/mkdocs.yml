@@ -1,8 +1,9 @@
 site_name: Gity Documentation
 site_description: Make large Git repositories feel instant
-site_url: https://gity.dev/docs
+site_url: https://gity.docs.neullabs.com/
 repo_url: https://github.com/neul-labs/gity
-repo_name: gity
+repo_name: neul-labs/gity
+edit_uri: edit/main/documentation/docs/
 
 theme:
   name: material
@@ -75,4 +76,4 @@ plugins:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/yourusername/gity
+      link: https://github.com/neul-labs/gity

@@ -1,16 +1,17 @@
 # Environment Variables
 
-Configuration via environment variables.
+Gity is configured exclusively through environment variables — there is no configuration file format today. The variables below are the ones the binary actually reads at runtime.
 
 ## Core Variables
 
 ### GITY_HOME
 
-Location of Gity's data directory.
+Location of Gity's data directory (database, status cache, logs).
 
-| Default (Unix) | Default (Windows) |
-|----------------|-------------------|
-| `~/.gity` | `%APPDATA%\Gity` |
+| Platform | Default |
+|----------|---------|
+| Linux / macOS | `~/.gity` |
+| Windows | `%APPDATA%\Gity` |
 
 **Usage:**
 
@@ -19,7 +20,7 @@ Location of Gity's data directory.
 export GITY_HOME=/custom/path/.gity
 
 # Windows PowerShell
-$env:GITY_HOME = "D:\gity-data"
+$env:GITY_HOME = "$env:APPDATA\Gity"
 
 # Windows CMD
 set GITY_HOME=D:\gity-data
@@ -37,11 +38,13 @@ $GITY_HOME/
     └── daemon.log    # Daemon logs
 ```
 
+The CLI creates this tree on demand, so first-time commands succeed without manual setup.
+
 ---
 
 ### GITY_DAEMON_ADDR
 
-IPC socket address for daemon communication.
+IPC socket address used by the daemon's REQ/REP control plane. The CLI, tray, and daemon must agree on this address.
 
 | Default |
 |---------|
@@ -53,232 +56,128 @@ IPC socket address for daemon communication.
 # Change port
 export GITY_DAEMON_ADDR=tcp://127.0.0.1:8888
 
-# Use Unix socket (Linux/macOS only)
-export GITY_DAEMON_ADDR=ipc:///tmp/gity.sock
+# Use an in-process address (advanced)
+export GITY_DAEMON_ADDR=inproc://gity-daemon
 ```
 
-!!! warning
-    Both daemon and CLI must use the same address.
+When the CLI launches the daemon (`gity daemon start`), it propagates this value to the daemon process automatically.
 
 ---
 
-## Logging Variables
+### GITY_EVENTS_ADDR
+
+Address for the daemon's PUB/SUB notification socket. `gity events` and `gity logs --follow` subscribe here.
+
+| Default |
+|---------|
+| The daemon's default events address (set in code) |
+
+**Usage:**
+
+```bash
+export GITY_EVENTS_ADDR=tcp://127.0.0.1:7558
+```
+
+Override this only when you have a reason to relocate the notification stream (e.g., port conflicts).
+
+---
+
+### GITY_FSMONITOR_HELPER
+
+Overrides the command string written into `core.fsmonitor` during `gity register`.
+
+By default Gity uses `gity fsmonitor-helper`, which works whenever the `gity` binary is on `PATH`. Set this variable when you need an absolute path or a custom invocation (for example, when Git runs in an environment with a different `PATH`):
+
+```bash
+export GITY_FSMONITOR_HELPER="/usr/local/bin/gity fsmonitor-helper"
+```
+
+The override is read by `gity register` and recorded in the repo's `.git/config`.
+
+---
+
+## Logging
 
 ### RUST_LOG
 
-Control log verbosity (standard Rust logging).
+Standard [`tracing` / `env_logger`](https://docs.rs/env_logger/) filter string. Gity emits structured logs through this filter.
 
 | Value | Description |
 |-------|-------------|
 | `error` | Only errors |
 | `warn` | Warnings and errors |
-| `info` | Informational messages (default) |
+| `info` | Informational messages |
 | `debug` | Debug information |
 | `trace` | Detailed tracing |
 
 **Usage:**
 
 ```bash
-# More verbose logging
-export RUST_LOG=debug
+# Verbose daemon logging
+RUST_LOG=info gity daemon run
 
-# Per-module logging
+# Per-module filtering
 export RUST_LOG=gity=debug,sled=warn
 ```
 
 ---
 
-### GITY_LOG_FORMAT
+## Standard Variables Gity Honors
 
-Log output format.
-
-| Value | Description |
-|-------|-------------|
-| `pretty` | Human-readable (default for tty) |
-| `json` | JSON format (default for non-tty) |
-| `compact` | Compact single-line format |
-
-**Usage:**
-
-```bash
-export GITY_LOG_FORMAT=json
-```
-
----
-
-## Git Variables
-
-These standard Git variables affect Gity's behavior:
-
-### GIT_DIR
-
-Override the Git directory location.
-
-```bash
-export GIT_DIR=/path/to/.git
-```
-
-### GIT_WORK_TREE
-
-Override the working tree location.
-
-```bash
-export GIT_WORK_TREE=/path/to/worktree
-```
-
----
-
-## System Variables
-
-### PATH
-
-Ensure `gity` and `git` are accessible.
-
-```bash
-# Add Gity to PATH
-export PATH="/usr/local/bin:$PATH"
-
-# Verify
-which gity
-which git
-```
-
-### HOME (Unix) / USERPROFILE (Windows)
-
-Used to determine default `GITY_HOME` location.
-
----
-
-## Platform-Specific Variables
-
-### Linux
-
-#### XDG_DATA_HOME
-
-If set, Gity may use this for data storage in future versions.
-
-```bash
-export XDG_DATA_HOME=~/.local/share
-```
-
-### macOS
-
-No additional variables.
-
-### Windows
-
-#### APPDATA
-
-Default location for `GITY_HOME` on Windows.
-
-Typically: `C:\Users\<username>\AppData\Roaming`
-
----
-
-## Debug Variables
-
-### GITY_DEBUG
-
-Enable debug mode with additional diagnostics.
-
-```bash
-export GITY_DEBUG=1
-```
-
-### GITY_TRACE
-
-Enable detailed tracing for troubleshooting.
-
-```bash
-export GITY_TRACE=1
-```
+| Variable | Effect |
+|----------|--------|
+| `HOME` (Unix) / `USERPROFILE` (Windows) | Used to compute the default `GITY_HOME`. |
+| `APPDATA` (Windows) | Used to compute the default `GITY_HOME`. |
+| `PATH` | Must contain `gity` and `git`. `core.fsmonitor` is invoked by Git, so `gity` must be discoverable in Git's environment too. |
+| `GIT_DIR`, `GIT_WORK_TREE` | Standard Git variables; honored transparently because Gity shells out to `git`. |
 
 ---
 
 ## Example Configurations
 
-### Development Setup
+### Development
 
 ```bash
-# More verbose logging
 export RUST_LOG=gity=debug
-
-# Custom data directory (not backed up)
 export GITY_HOME=/tmp/gity-dev
+gity daemon run
 ```
 
-### CI/CD Setup
+### CI / Ephemeral runners
 
 ```bash
-# JSON logs for parsing
-export GITY_LOG_FORMAT=json
-
-# Minimal logging
+export GITY_HOME="$RUNNER_TEMP/gity"
 export RUST_LOG=warn
-
-# Ephemeral data directory
-export GITY_HOME=/tmp/gity-ci
+gity daemon oneshot "$GITHUB_WORKSPACE"
 ```
 
-### Production Setup
+### Shared workstation, multiple users
 
 ```bash
-# Standard logging
-export RUST_LOG=info
-
-# Custom location with more space
-export GITY_HOME=/var/lib/gity
-```
-
-### Multiple Users
-
-For shared systems with multiple users:
-
-```bash
-# Each user gets their own data directory (default behavior)
-# GITY_HOME defaults to ~/.gity per user
-
-# Or use a shared location with user subdirectories
-export GITY_HOME=/shared/gity/$USER
+# Default behavior: each user gets their own ~/.gity
+# To force isolation explicitly:
+export GITY_HOME="$HOME/.gity"
 ```
 
 ---
 
 ## Setting Variables Permanently
 
-### Linux/macOS
+### Linux / macOS
 
 Add to `~/.bashrc`, `~/.zshrc`, or `~/.profile`:
 
 ```bash
-export GITY_HOME=~/.gity
+export GITY_HOME="$HOME/.gity"
 export RUST_LOG=info
 ```
 
 ### Windows
 
-**System Properties:**
-
-1. Search for "Environment Variables"
-2. Click "Edit the system environment variables"
-3. Click "Environment Variables"
-4. Add user or system variables
-
-**PowerShell Profile:**
-
-Add to `$PROFILE`:
+PowerShell profile (`$PROFILE`):
 
 ```powershell
 $env:GITY_HOME = "$env:APPDATA\Gity"
 ```
 
----
-
-## Precedence
-
-Environment variables take precedence over:
-
-1. Default values
-2. Configuration files (when supported)
-
-Command-line arguments take precedence over environment variables.
+Or set via **System Properties → Environment Variables** for a permanent system-wide value.

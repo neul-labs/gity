@@ -170,7 +170,7 @@ Once installed, head to the [Quick Start](quick-start.md) guide to accelerate yo
 === "pip"
 
     ```bash
-    pip uninstall gity
+    pip uninstall gity-cli
     ```
 
 === "Linux (.deb)"

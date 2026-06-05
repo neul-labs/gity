@@ -10,7 +10,7 @@ Gity uses **ReadDirectoryChangesW** for file watching on Windows. This is the na
 
 ### MSI Installer
 
-Download the MSI from [releases](https://github.com/yourusername/gity/releases) and run it.
+Download the MSI from [releases](https://github.com/neul-labs/gity/releases) and run it.
 
 The installer:
 

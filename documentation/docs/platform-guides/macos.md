@@ -38,7 +38,7 @@ brew install gity
 
 ### Package Installer
 
-Download the `.pkg` from [releases](https://github.com/yourusername/gity/releases) and double-click to install.
+Download the `.pkg` from [releases](https://github.com/neul-labs/gity/releases) and double-click to install.
 
 ## System Service
 

@@ -1,6 +1,6 @@
 # CLI Reference
 
-Complete command-line reference for Gity.
+Complete command-line reference for Gity. Every command in this page is defined in `crates/gity-cli/src/lib.rs`.
 
 ## Synopsis
 
@@ -15,21 +15,15 @@ gity [OPTIONS] <COMMAND>
 | `--version` | Print version information |
 | `--help` | Print help information |
 
-## Commands
+## Repository Commands
 
 ### register
 
 Register a repository for acceleration.
 
 ```
-gity register <PATH>
+gity register <REPO_PATH>
 ```
-
-**Arguments:**
-
-| Argument | Description |
-|----------|-------------|
-| `PATH` | Path to the Git repository |
 
 **Example:**
 
@@ -40,10 +34,10 @@ gity register .
 
 **Effects:**
 
-- Starts file watcher for the repository
-- Configures Git fsmonitor settings
-- Performs initial cache population
-- Schedules background maintenance
+- Records the repo in the daemon's sled metadata store.
+- Edits the repo's `.git/config` to enable `core.fsmonitor`, `core.untrackedCache`, `feature.manyFiles`, and partial-clone settings.
+- Starts a watcher and scheduler dedicated to the repo.
+- Performs an initial scan to populate metadata.
 
 ---
 
@@ -52,26 +46,14 @@ gity register .
 Stop accelerating a repository.
 
 ```
-gity unregister <PATH>
-```
-
-**Arguments:**
-
-| Argument | Description |
-|----------|-------------|
-| `PATH` | Path to the registered repository |
-
-**Example:**
-
-```bash
-gity unregister /home/user/projects/myrepo
+gity unregister <REPO_PATH>
 ```
 
 **Effects:**
 
-- Stops file watcher
-- Removes Git fsmonitor configuration
-- Cleans up cached metadata
+- Stops the watcher and removes scheduler entries.
+- Removes the fsmonitor-related entries from the repo's `.git/config`.
+- Drops cached metadata from sled.
 
 ---
 
@@ -80,117 +62,69 @@ gity unregister /home/user/projects/myrepo
 List all registered repositories.
 
 ```
-gity list [OPTIONS]
+gity list [--stats]
 ```
 
 **Options:**
 
 | Option | Description |
 |--------|-------------|
-| `--stats` | Include resource usage statistics |
+| `--stats` | Include CPU, RSS, cache size, and queue depth per repo. |
 
-**Example:**
-
-```bash
-gity list
-gity list --stats
-```
-
-**Output:**
+**Example output:**
 
 ```
-Registered repositories:
-  /home/user/projects/frontend
-  /home/user/projects/backend
-```
-
-With `--stats`:
-
-```
-Registered repositories:
-  /home/user/projects/frontend
-    CPU: 0.1%  RSS: 12MB  Cache: 5MB  Jobs: 0
-  /home/user/projects/backend
-    CPU: 0.2%  RSS: 15MB  Cache: 8MB  Jobs: 1
+/home/user/projects/frontend [0 jobs, status idle, gen 12]
+/home/user/projects/backend  [1 jobs, status busy, gen 47]
 ```
 
 ---
 
 ### status
 
-Get fast status summary.
+Print cached status for a repository.
 
 ```
-gity status <PATH>
+gity status <REPO_PATH>
 ```
 
-**Arguments:**
-
-| Argument | Description |
-|----------|-------------|
-| `PATH` | Path to the registered repository |
-
-**Example:**
-
-```bash
-gity status /home/user/projects/myrepo
-```
-
-**Output:**
-
-Returns clean/dirty state and list of changed paths.
+Returns either `clean (generation N)` or the repo path followed by the dirty paths.
 
 ---
 
 ### health
 
-Run diagnostic checks.
+Run diagnostic checks against a registered repo.
 
 ```
-gity health <PATH>
+gity health <REPO_PATH>
 ```
 
-**Arguments:**
+The output includes:
 
-| Argument | Description |
-|----------|-------------|
-| `PATH` | Path to the registered repository |
-
-**Example:**
-
-```bash
-gity health /home/user/projects/myrepo
-```
-
-**Output includes:**
-
-- Watcher status
-- Generation token
+- Current generation token
+- Pending job count
+- Watcher state (`active` / `inactive`)
+- Last filesystem event timestamp
 - Dirty path count
-- Scheduled jobs
-- Resource throttling status
+- Sled integrity (`ok` / `ERROR`)
+- Whether reconciliation is needed
+- Whether resource throttling is active
+- Next scheduled background job, if any
 
 ---
 
 ### changed
 
-List files changed since a token.
+List files changed since a generation token.
 
 ```
-gity changed <PATH> [OPTIONS]
+gity changed <REPO_PATH> [--since <TOKEN>]
 ```
-
-**Arguments:**
-
-| Argument | Description |
-|----------|-------------|
-| `PATH` | Path to the registered repository |
-
-**Options:**
 
 | Option | Description |
 |--------|-------------|
-| `--since <TOKEN>` | Watcher token (default: last status token) |
+| `--since <TOKEN>` | Numeric generation token (defaults to the daemon's last status token). |
 
 **Example:**
 
@@ -203,280 +137,191 @@ gity changed /home/user/projects/myrepo --since 42
 
 ### prefetch
 
-Trigger background fetch.
+Queue a background `git maintenance run --task=prefetch` job.
 
 ```
-gity prefetch <PATH> [now]
+gity prefetch <REPO_PATH> [--now]
 ```
 
-**Arguments:**
-
-| Argument | Description |
-|----------|-------------|
-| `PATH` | Path to the registered repository |
-| `now` | Optional: jump to front of queue |
-
-**Example:**
-
-```bash
-gity prefetch /home/user/projects/myrepo
-gity prefetch /home/user/projects/myrepo now
-```
+| Option | Description |
+|--------|-------------|
+| `--now` | Run immediately instead of waiting for the scheduler. |
 
 ---
 
 ### maintain
 
-Force maintenance tasks.
+Force maintenance tasks (commit-graph refresh, GC, etc.) regardless of idle timers.
 
 ```
-gity maintain <PATH>
+gity maintain <REPO_PATH>
 ```
-
-**Arguments:**
-
-| Argument | Description |
-|----------|-------------|
-| `PATH` | Path to the registered repository |
-
-**Example:**
-
-```bash
-gity maintain /home/user/projects/myrepo
-```
-
-**Tasks run:**
-
-- Commit-graph refresh
-- Garbage collection
-- Other maintenance operations
 
 ---
 
 ### logs
 
-Stream daemon logs.
+Stream the daemon's structured logs for a repository.
 
 ```
-gity logs <PATH> [OPTIONS]
+gity logs <REPO_PATH> [--follow] [--limit <N>]
 ```
 
-**Arguments:**
-
-| Argument | Description |
-|----------|-------------|
-| `PATH` | Path to the registered repository |
-
-**Options:**
-
-| Option | Description |
-|--------|-------------|
-| `--follow` | Tail live output |
-| `--limit <N>` | Number of entries (default: 50) |
-
-**Example:**
-
-```bash
-gity logs /home/user/projects/myrepo
-gity logs /home/user/projects/myrepo --follow
-gity logs /home/user/projects/myrepo --limit 100
-```
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--follow` | off | Tail live output until interrupted. |
+| `--limit <N>` | `50` | Number of entries to print. |
 
 ---
 
 ### events
 
-Stream file watcher events.
+Subscribe to the daemon's PUB socket and stream watcher events until interrupted.
 
 ```
 gity events
 ```
-
-Subscribes to the daemon's PUB socket and streams notifications.
-
-**Example:**
-
-```bash
-gity events
-# Press Ctrl+C to stop
-```
-
----
-
-### daemon run
-
-Start daemon in foreground.
-
-```
-gity daemon run [OPTIONS]
-```
-
-**Options:**
-
-| Option | Description |
-|--------|-------------|
-| `--config <PATH>` | Path to configuration file |
-
-**Example:**
-
-```bash
-gity daemon run
-gity daemon run --config /path/to/config.toml
-```
-
-Press `Ctrl+C` to exit.
-
----
-
-### daemon start
-
-Start daemon in background.
-
-```
-gity daemon start
-```
-
-**Example:**
-
-```bash
-gity daemon start
-```
-
----
-
-### daemon stop
-
-Stop the daemon gracefully.
-
-```
-gity daemon stop
-```
-
-**Example:**
-
-```bash
-gity daemon stop
-```
-
----
-
-### daemon oneshot
-
-Start daemon, service a repo, then exit.
-
-```
-gity daemon oneshot <PATH>
-```
-
-**Arguments:**
-
-| Argument | Description |
-|----------|-------------|
-| `PATH` | Path to the repository |
-
-**Example:**
-
-```bash
-gity daemon oneshot /home/user/projects/myrepo
-git status
-git diff --cached
-```
-
-Useful for CI/CD pipelines.
-
----
-
-### daemon metrics
-
-Print current resource metrics.
-
-```
-gity daemon metrics
-```
-
-**Example:**
-
-```bash
-gity daemon metrics
-```
-
-**Output includes:**
-
-- CPU usage
-- Memory (RSS)
-- File descriptors
-- Cache usage
-- Job queue depths
-
----
-
-### tray
-
-Launch system tray UI.
-
-```
-gity tray
-```
-
-**Example:**
-
-```bash
-gity tray
-```
-
-The tray provides:
-
-- Repository status overview
-- Health information
-- Exit option (stops daemon)
 
 ---
 
 ### fsmonitor-helper
 
-Git fsmonitor protocol implementation.
+Implementation backing Git's `core.fsmonitor` hook. This is invoked by Git, not by users.
 
 ```
-gity fsmonitor-helper <VERSION> <TOKEN>
+gity fsmonitor-helper [VERSION] [TOKEN] [--repo <PATH>]
 ```
 
-**Arguments:**
+| Argument / Option | Description |
+|-------------------|-------------|
+| `VERSION` | Protocol version (`1` or `2`, default `2`). |
+| `TOKEN` | Opaque token from the previous response. |
+| `--repo <PATH>` | Override the repo path (useful when invoked outside the working tree). |
 
-| Argument | Description |
-|----------|-------------|
-| `VERSION` | Protocol version (must be `2`) |
-| `TOKEN` | Opaque token from previous response |
-
-!!! note
-    This command is invoked by Git, not directly by users.
+Output is NUL-separated: `<new_token>\0<path1>\0<path2>\0...`.
 
 ---
 
-## Exit Codes
+## Daemon Subcommands
 
-| Code | Meaning |
-|------|---------|
-| 0 | Success |
-| 1 | General error |
-| 2 | Invalid arguments |
-| 3 | Repository not found |
-| 4 | Daemon not running |
-| 5 | Permission denied |
+### daemon run
 
-## Shell Completion
+Run the daemon in the current process (foreground). Press `Ctrl+C` to exit.
 
-Generate shell completion scripts:
-
-```bash
-# Bash
-gity completions bash > /etc/bash_completion.d/gity
-
-# Zsh
-gity completions zsh > ~/.zsh/completion/_gity
-
-# Fish
-gity completions fish > ~/.config/fish/completions/gity.fish
-
-# PowerShell
-gity completions powershell > gity.ps1
 ```
+gity daemon run
+```
+
+### daemon start
+
+Start the daemon as a detached background process. Used implicitly by other CLI commands and by `gity tray` when the daemon isn't already running.
+
+```
+gity daemon start
+```
+
+### daemon stop
+
+Signal the running daemon to shut down gracefully.
+
+```
+gity daemon stop
+```
+
+### daemon oneshot
+
+Run the daemon for a single repository, service its queued jobs, then exit. Useful for CI pipelines that want a hot fsmonitor without leaving a persistent daemon behind.
+
+```
+gity daemon oneshot <REPO_PATH>
+```
+
+### daemon health
+
+Fetch a health summary from the running daemon (repo count, pending jobs, uptime, per-repo generations).
+
+```
+gity daemon health
+```
+
+### daemon metrics
+
+Print the latest daemon-wide metrics: CPU %, RSS, uptime, per-repo queue depth, and job counters (spawned/completed/failed) by kind.
+
+```
+gity daemon metrics
+```
+
+### daemon queue-job
+
+Manually enqueue a background job.
+
+```
+gity daemon queue-job <REPO_PATH> <JOB>
+```
+
+| Job | Description |
+|-----|-------------|
+| `prefetch` | Background `git maintenance --task=prefetch`. |
+| `maintenance` | Generic maintenance tasks (commit-graph, GC, etc.). |
+
+---
+
+## Database Subcommands
+
+The `db` group operates on Gity's sled-backed storage.
+
+### db stats
+
+Show database statistics (file sizes and entry counts).
+
+```
+gity db stats
+```
+
+### db compact
+
+Compact database files to reclaim space.
+
+```
+gity db compact
+```
+
+### db prune-logs
+
+Prune old log entries from persistent storage.
+
+```
+gity db prune-logs [--older-than <DAYS>]
+```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--older-than <DAYS>` | `7` | Remove log entries older than this many days. |
+
+---
+
+## Tray
+
+### tray
+
+Launch the cross-platform system tray UI.
+
+```
+gity tray
+```
+
+The tray menu provides an **Info** window (registered repos, watcher health, queue depths, resource usage) and an **Exit** item that is equivalent to `gity daemon stop`.
+
+If the daemon is not running, `gity tray` starts it before showing the icon.
+
+---
+
+## Behaviour Notes
+
+- CLI and tray commands implicitly call `gity daemon start` when the daemon is not already running.
+- `gity list --stats` reports CPU %, RSS, cache size, and queued job count per repo.
+- `gity logs` reads from the daemon's structured log ring stored in sled, so history survives daemon restarts.
+- `gity health` is the safest command to run after long downtime: it surfaces reconciliation requirements, the next scheduled job, and active resource throttling.
+
+See [Architecture](../concepts/architecture.md) for how each command interacts with the watcher, scheduler, and IPC layers.

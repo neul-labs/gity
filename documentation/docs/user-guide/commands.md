@@ -135,18 +135,18 @@ gity changed /path/to/repo --since 42
 Trigger background fetch and maintenance.
 
 ```bash
-gity prefetch <path> [now]
+gity prefetch <path> [--now]
 ```
 
-**Arguments:**
+**Options:**
 
-- `now` — Jump to front of job queue
+- `--now` — Run immediately instead of waiting for the scheduler
 
 **Example:**
 
 ```bash
 gity prefetch /path/to/repo
-gity prefetch /path/to/repo now  # Immediate
+gity prefetch /path/to/repo --now  # Immediate
 ```
 
 ---
@@ -215,17 +215,31 @@ gity events
 
 ### daemon run
 
-Start the daemon in the foreground.
+Start the daemon in the foreground. Press `Ctrl+C` to exit.
 
 ```bash
-gity daemon run [--config PATH]
+gity daemon run
 ```
 
-**Options:**
+---
 
-- `--config PATH` — Path to configuration file
+### daemon health
 
-Press `Ctrl+C` to exit.
+Fetch a health summary from the running daemon (repo count, pending jobs, uptime, per-repo generations).
+
+```bash
+gity daemon health
+```
+
+---
+
+### daemon queue-job
+
+Manually enqueue a background job for a repo.
+
+```bash
+gity daemon queue-job <path> <prefetch|maintenance>
+```
 
 ---
 
@@ -283,6 +297,38 @@ Shows CPU, RSS, file descriptors, cache usage, and job queue depths.
 
 ---
 
+## Database Commands
+
+Gity stores metadata, queues, and logs in a local sled database under `$GITY_HOME/data/sled`. The `db` subcommands operate on that store.
+
+### db stats
+
+Show database statistics (file sizes and entry counts).
+
+```bash
+gity db stats
+```
+
+### db compact
+
+Compact database files to reclaim space.
+
+```bash
+gity db compact
+```
+
+### db prune-logs
+
+Prune old log entries from persistent storage.
+
+```bash
+gity db prune-logs [--older-than <DAYS>]
+```
+
+- `--older-than <DAYS>` — Remove entries older than this many days (default: `7`).
+
+---
+
 ## System Tray
 
 ### tray
@@ -309,16 +355,17 @@ If the daemon isn't running, `gity tray` starts it automatically.
 Git fsmonitor protocol implementation.
 
 ```bash
-gity fsmonitor-helper <version> <token>
+gity fsmonitor-helper [<version>] [<token>] [--repo <path>]
 ```
 
 !!! note
     This command is invoked by Git, not directly by users. It implements the fsmonitor protocol to report changed files.
 
-**Arguments:**
+**Arguments / options:**
 
-- `<version>` — Protocol version (must be `2`)
+- `<version>` — Protocol version (`1` or `2`, default `2`)
 - `<token>` — Opaque token from previous response
+- `--repo <path>` — Override the repo path (useful when invoked outside the working tree)
 
 ---
 
